@@ -1,8 +1,4 @@
-import { RtcTokenBuilder, RtcRole } from 'agora-token';
-
-export const config = {
-  runtime: 'edge',
-};
+import { AccessToken, RtcRole, Privileges } from 'agora-token';
 
 export default async function handler(request: Request) {
   // CORS preflight request
@@ -47,6 +43,7 @@ export default async function handler(request: Request) {
     });
   }
 
+  // UID can be 0. If it is 0, the Agora server assigns a UID.
   const uid = parseInt(uidStr, 10);
   if (isNaN(uid)) {
       return new Response(JSON.stringify({ error: 'uid must be an integer' }), {
@@ -61,16 +58,19 @@ export default async function handler(request: Request) {
   const currentTime = Math.floor(Date.now() / 1000);
   const privilegeExpireTime = currentTime + expireTime;
 
-  // Build the token
+  // Build the token using AccessToken class
   try {
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      APP_ID,
-      APP_CERTIFICATE,
-      channelName,
-      uid,
-      role,
-      privilegeExpireTime
-    );
+    const accessToken = new AccessToken(APP_ID, APP_CERTIFICATE, channelName, uid.toString());
+    accessToken.addPrivilege(Privileges.kJoinChannel, privilegeExpireTime);
+
+    // As a publisher, you can also grant privileges to publish streams
+    if (role === RtcRole.PUBLISHER) {
+        accessToken.addPrivilege(Privileges.kPublishAudioStream, privilegeExpireTime);
+        accessToken.addPrivilege(Privileges.kPublishVideoStream, privilegeExpireTime);
+        accessToken.addPrivilege(Privileges.kPublishDataStream, privilegeExpireTime);
+    }
+
+    const token = accessToken.build();
 
     // Return the token
     return new Response(JSON.stringify({ rtcToken: token }), {
