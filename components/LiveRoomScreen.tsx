@@ -198,9 +198,10 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [showHeartAnimation, setShowHeartAnimation] = useState(false);
     const prevReactionsRef = useRef<Record<string, Record<string, number>>>({});
 
-
     const onGoBackRef = useRef(onGoBack);
     const onSetTtsMessageRef = useRef(onSetTtsMessage);
+
+    const MAX_VISIBLE_LISTENERS = 5;
 
     useEffect(() => {
         onGoBackRef.current = onGoBack;
@@ -326,7 +327,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     }, [roomId]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }, [messages]);
     
     useEffect(() => {
@@ -428,6 +429,8 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     });
 
     const activeAppSpeakerId = activeSpeakerId ? speakerIdMap.get(activeSpeakerId) : null;
+    const visibleListeners = room.listeners.slice(0, MAX_VISIBLE_LISTENERS);
+    const hiddenListenersCount = room.listeners.length - MAX_VISIBLE_LISTENERS;
 
     return (
         <div className="h-full w-full flex flex-col md:flex-row bg-slate-900 text-white overflow-hidden">
@@ -465,9 +468,14 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
              `}</style>
             <div className="flex-grow flex flex-col h-full overflow-hidden">
                 <header className="flex-shrink-0 p-4 flex justify-between items-center bg-black/20">
-                    <div>
-                        <h1 className="text-xl font-bold truncate">{room.topic}</h1>
-                        <p className="text-sm text-slate-400">with {room.host.name}</p>
+                    <div className="flex items-center gap-3">
+                        <button onClick={onGoBack} className="p-2 -ml-2 rounded-full text-slate-300 hover:bg-slate-700">
+                            <Icon name="back" className="w-6 h-6" />
+                        </button>
+                        <div>
+                            <h1 className="text-xl font-bold truncate">{room.topic}</h1>
+                            <p className="text-sm text-slate-400">with {room.host.name}</p>
+                        </div>
                     </div>
                      <button onClick={handleLeave} className="bg-red-600/20 hover:bg-red-600/40 text-red-400 font-bold p-2.5 rounded-full md:hidden" aria-label="Leave Room">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -504,7 +512,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     <section>
                         <h2 className="text-lg font-semibold text-slate-300 mb-4">Listeners ({room.listeners.length})</h2>
                         <div className="flex flex-wrap gap-4">
-                            {room.listeners.map(listener => (
+                            {visibleListeners.map(listener => (
                                 <div key={listener.id} className="relative" title={listener.name}>
                                     <img src={listener.avatarUrl} alt={listener.name} className="w-12 h-12 rounded-full" />
                                     {room.raisedHands.includes(listener.id) && (
@@ -512,6 +520,15 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                                     )}
                                 </div>
                             ))}
+                            {hiddenListenersCount > 0 && (
+                                <button 
+                                    onClick={() => onNavigate(AppView.ROOM_PARTICIPANTS, { roomId: room.id })}
+                                    className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center font-bold text-slate-200 hover:bg-slate-500"
+                                    aria-label="View all listeners"
+                                >
+                                    +{hiddenListenersCount}
+                                </button>
+                            )}
                         </div>
                     </section>
                 </main>

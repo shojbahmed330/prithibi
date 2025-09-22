@@ -27,6 +27,7 @@ import MobileBottomNav from './components/MobileBottomNav';
 import RoomsHubScreen from './components/RoomsHubScreen';
 import RoomsListScreen from './components/RoomsListScreen';
 import LiveRoomScreen from './components/LiveRoomScreen';
+import RoomParticipantsScreen from './components/RoomParticipantsScreen';
 import VideoRoomsListScreen from './components/VideoRoomsListScreen';
 import LiveVideoRoomScreen from './components/LiveVideoRoomScreen';
 import GroupsHubScreen from './components/GroupsHubScreen';
@@ -1000,6 +1001,8 @@ const UserApp: React.FC = () => {
         return <RoomsListScreen {...commonScreenProps} />;
       case AppView.LIVE_ROOM:
         return <LiveRoomScreen {...commonScreenProps} {...currentView.props} />;
+      case AppView.ROOM_PARTICIPANTS:
+        return <RoomParticipantsScreen {...commonScreenProps} {...currentView.props} />;
       case AppView.VIDEO_ROOMS_LIST:
         return <VideoRoomsListScreen {...commonScreenProps} />;
       case AppView.LIVE_VIDEO_ROOM:
@@ -1039,7 +1042,8 @@ const UserApp: React.FC = () => {
       AppView.CALL_SCREEN,
       AppView.CREATE_STORY,
       AppView.CREATE_REEL,
-      AppView.STORY_VIEWER
+      AppView.STORY_VIEWER,
+      AppView.ROOM_PARTICIPANTS
   ].includes(currentView.view);
   
   if (!user) {
@@ -1067,16 +1071,18 @@ const UserApp: React.FC = () => {
   
   return (
     <div className="h-screen w-screen bg-transparent flex font-sans text-slate-100 overflow-hidden">
-      <Sidebar
-        currentUser={user}
-        onNavigate={handleNavigation}
-        friendRequestCount={friendRequestCount}
-        activeView={currentView.view}
-        voiceCoins={user.voiceCoins || 0}
-        voiceState={voiceState}
-        onMicClick={handleMicClick}
-        isChatRecording={isChatRecording}
-      />
+      {!isFullScreenView && (
+          <Sidebar
+            currentUser={user}
+            onNavigate={handleNavigation}
+            friendRequestCount={friendRequestCount}
+            activeView={currentView.view}
+            voiceCoins={user.voiceCoins || 0}
+            voiceState={voiceState}
+            onMicClick={handleMicClick}
+            isChatRecording={isChatRecording}
+          />
+      )}
       
       <main className="flex-grow overflow-hidden relative flex flex-col">
         {/* Header */}
@@ -1156,14 +1162,14 @@ const UserApp: React.FC = () => {
         )}
 
         <div className="flex-grow overflow-hidden relative">
-          <div className={`h-full w-full absolute inset-0 overflow-y-auto ${isFullScreenView ? '' : 'pb-32 md:pb-8'}`}>
+          <div className={`h-full w-full absolute inset-0 overflow-y-auto ${!isFullScreenView ? 'pb-32 md:pb-8' : ''}`}>
             {renderView()}
           </div>
         </div>
 
       </main>
       
-      <ContactsPanel friends={friends} onOpenConversation={handleOpenConversation} />
+      {!isFullScreenView && <ContactsPanel friends={friends} onOpenConversation={handleOpenConversation} />}
       
       {user && activeChats.length > 0 && (
           <ChatManager
