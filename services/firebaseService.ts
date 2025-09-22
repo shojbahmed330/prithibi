@@ -1451,7 +1451,98 @@ async reactToLiveAudioRoomMessage(roomId: string, messageId: string, userId: str
         console.error("React to live room message transaction failed:", e);
     }
 },
-async sendLiveAudioRoomMessage(roomId: string, sender: User, text: string, isHost: boolean, isSpeaker: boolean): Promise<void> {
+// @FIXML-FIX-427-432: Added missing room management functions.
+async promoteToCoHost(roomId: string, hostId: string, userId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists && roomDoc.data().host.id === hostId) {
+        const userToPromote = roomDoc.data().speakers.find(s => s.id === userId);
+        if (userToPromote) {
+            await roomRef.update({
+                coHosts: arrayUnion(userToPromote),
+            });
+        }
+    }
+},
+async demoteCoHost(roomId: string, hostId: string, userId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists && roomDoc.data().host.id === hostId) {
+        const userToDemote = roomDoc.data().coHosts.find(c => c.id === userId);
+        if (userToDemote) {
+            await roomRef.update({
+                coHosts: arrayRemove(userToDemote),
+            });
+        }
+    }
+},
+async muteSpeakerInRoom(roomId: string, adminId: string, userId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+        const roomData = roomDoc.data();
+        const isHost = roomData.host.id === adminId;
+        const isCoHost = roomData.coHosts?.some(c => c.id === adminId);
+        if (isHost || isCoHost) {
+            await roomRef.update({ mutedSpeakers: arrayUnion(userId) });
+        }
+    }
+},
+async unmuteSpeakerInRoom(roomId: string, adminId: string, userId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+        const roomData = roomDoc.data();
+        const isHost = roomData.host.id === adminId;
+        const isCoHost = roomData.coHosts?.some(c => c.id === adminId);
+        if (isHost || isCoHost) {
+            await roomRef.update({ mutedSpeakers: arrayRemove(userId) });
+        }
+    }
+},
+async muteAllSpeakersInRoom(roomId: string, adminId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+        const roomData = roomDoc.data();
+        const isHost = roomData.host.id === adminId;
+        const isCoHost = roomData.coHosts?.some(c => c.id === adminId);
+        if (isHost || isCoHost) {
+            const speakerIdsToMute = roomData.speakers
+                .map(s => s.id)
+                .filter(id => id !== roomData.host.id && !(roomData.coHosts?.some(c => c.id === id)));
+            await roomRef.update({ mutedSpeakers: arrayUnion(...speakerIdsToMute) });
+        }
+    }
+},
+async kickUserFromRoom(roomId: string, adminId: string, userId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+        const roomData = roomDoc.data();
+        const isHost = roomData.host.id === adminId;
+        const isCoHost = roomData.coHosts?.some(c => c.id === adminId);
+        
+        if (isHost || isCoHost) {
+            // Find the user to kick in listeners or speakers
+            const listenerToKick = roomData.listeners.find(u => u.id === userId);
+            const speakerToKick = roomData.speakers.find(u => u.id === userId);
+            
+            const updatePayload: any = {
+                kickedUserIds: arrayUnion(userId)
+            };
+            if(listenerToKick) {
+                updatePayload.listeners = arrayRemove(listenerToKick);
+            }
+            if(speakerToKick) {
+                updatePayload.speakers = arrayRemove(speakerToKick);
+            }
+            
+            await roomRef.update(updatePayload);
+        }
+    }
+},
+async sendLiveAudioRoomMessage(roomId: string, sender: User, text: string, isHost: boolean, isSpeaker: boolean, isCoHost: boolean): Promise<void> {
     const messageData = {
         sender: {
             id: sender.id,
@@ -1461,6 +1552,7 @@ async sendLiveAudioRoomMessage(roomId: string, sender: User, text: string, isHos
         text,
         isHost,
         isSpeaker,
+        isCoHost,
         createdAt: serverTimestamp(),
         reactions: {},
     };

@@ -250,8 +250,11 @@ export interface LiveAudioRoom {
   host: User;
   topic: string;
   speakers: User[];
+  coHosts?: User[];
   listeners: User[];
   raisedHands: string[]; // Array of user IDs
+  mutedSpeakers?: string[]; // Array of speaker IDs muted by host/co-host
+  kickedUserIds?: string[]; // Array of user IDs kicked from the room
   createdAt: string;
   status: 'live' | 'ended';
 }
@@ -267,6 +270,7 @@ export interface LiveAudioRoomMessage {
   createdAt: string; // ISO string
   isHost?: boolean;
   isSpeaker?: boolean;
+  isCoHost?: boolean;
   reactions?: { [emoji: string]: string[] }; // Key: emoji, Value: array of user IDs
 }
 

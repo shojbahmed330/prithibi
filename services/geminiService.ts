@@ -419,12 +419,18 @@ export const geminiService = {
     endLiveVideoRoom: (userId: string, roomId: string) => firebaseService.endLiveVideoRoom(userId, roomId),
     getAudioRoomDetails: (roomId: string) => firebaseService.getAudioRoomDetails(roomId),
     raiseHandInAudioRoom: (userId: string, roomId: string) => firebaseService.raiseHandInAudioRoom(userId, roomId),
-    inviteToSpeakInAudioRoom: (hostId: string, userId: string, roomId: string) => firebaseService.inviteToSpeakInAudioRoom(hostId, userId, roomId),
-    moveToAudienceInAudioRoom: (hostId: string, userId: string, roomId: string) => firebaseService.moveToAudienceInAudioRoom(hostId, userId, roomId),
+    inviteToSpeakInAudioRoom: (adminId: string, userId: string, roomId: string) => firebaseService.inviteToSpeakInAudioRoom(adminId, userId, roomId),
+    moveToAudienceInAudioRoom: (adminId: string, userId: string, roomId: string) => firebaseService.moveToAudienceInAudioRoom(adminId, userId, roomId),
     listenToLiveAudioRoomMessages: (roomId: string, callback: (messages: LiveAudioRoomMessage[]) => void) => firebaseService.listenToLiveAudioRoomMessages(roomId, callback),
-    sendLiveAudioRoomMessage: (roomId: string, sender: User, text: string, isHost: boolean, isSpeaker: boolean) => firebaseService.sendLiveAudioRoomMessage(roomId, sender, text, isHost, isSpeaker),
+    sendLiveAudioRoomMessage: (roomId: string, sender: User, text: string, isHost: boolean, isSpeaker: boolean, isCoHost: boolean) => firebaseService.sendLiveAudioRoomMessage(roomId, sender, text, isHost, isSpeaker, isCoHost),
     reactToLiveAudioRoomMessage: (roomId: string, messageId: string, userId: string, emoji: string) => firebaseService.reactToLiveAudioRoomMessage(roomId, messageId, userId, emoji),
-    
+    promoteToCoHost: (roomId: string, hostId: string, userId: string) => firebaseService.promoteToCoHost(roomId, hostId, userId),
+    demoteCoHost: (roomId: string, hostId: string, userId: string) => firebaseService.demoteCoHost(roomId, hostId, userId),
+    muteSpeakerInRoom: (roomId: string, adminId: string, userId: string) => firebaseService.muteSpeakerInRoom(roomId, adminId, userId),
+    unmuteSpeakerInRoom: (roomId: string, adminId: string, userId: string) => firebaseService.unmuteSpeakerInRoom(roomId, adminId, userId),
+    muteAllSpeakersInRoom: (roomId: string, adminId: string) => firebaseService.muteAllSpeakersInRoom(roomId, adminId),
+    kickUserFromRoom: (roomId: string, adminId: string, userId: string) => firebaseService.kickUserFromRoom(roomId, adminId, userId),
+
     // --- Ads & Campaigns ---
     getCampaignsForSponsor: (sponsorId: string) => firebaseService.getCampaignsForSponsor(sponsorId),
     submitCampaignForApproval: (campaignData: Omit<Campaign, 'id'|'views'|'clicks'|'status'|'transactionId'>, transactionId: string) => firebaseService.submitCampaignForApproval(campaignData, transactionId),
