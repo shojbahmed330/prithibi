@@ -30,6 +30,19 @@ const ListenerCard: React.FC<{ user: User; onClick: () => void }> = ({ user, onC
     </button>
 );
 
+const Message: React.FC<{ message: LiveAudioRoomMessage }> = ({ message }) => (
+    <div className="flex items-start gap-2 text-sm max-w-full">
+        <img src={message.sender.avatarUrl} className="w-8 h-8 rounded-full flex-shrink-0 mt-1" alt={message.sender.name} />
+        <div className="flex-shrink min-w-0 bg-slate-800/50 px-3 py-2 rounded-lg">
+            <div className="flex items-baseline gap-2">
+                <span className="font-semibold text-lime-400">{message.sender.name}</span>
+                 <span className="text-xs text-slate-500">{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <p className="text-slate-200 break-words whitespace-pre-wrap">{message.text}</p>
+        </div>
+    </div>
+);
+
 
 const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, onGoBack, onNavigate, onSetTtsMessage }) => {
     const [room, setRoom] = useState<LiveAudioRoom | null>(null);
@@ -38,12 +51,13 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [newMessage, setNewMessage] = useState('');
     const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
     
-    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const mainContentRef = useRef<HTMLElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
 
     const isHost = room?.host.id === currentUser.id;
     const isSpeaker = room?.speakers.some(s => s.id === currentUser.id);
-    const isListener = !isSpeaker;
+    const isListener = !isSpeaker && !isHost;
 
     useEffect(() => {
         setIsLoading(true);
@@ -69,8 +83,13 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     }, [roomId, onGoBack, currentUser.id, onSetTtsMessage]);
 
     useEffect(() => {
-        if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        const mainEl = mainContentRef.current;
+        if (mainEl) {
+            // Auto-scroll only if user is already near the bottom
+            const isScrolledToBottom = mainEl.scrollHeight - mainEl.clientHeight <= mainEl.scrollTop + 150;
+            if (isScrolledToBottom) {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }
         }
     }, [messages]);
 
@@ -134,36 +153,27 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 </button>
             </header>
 
-            <div className="flex-grow flex flex-col overflow-hidden">
-                <div className="flex-grow p-4 space-y-6 overflow-y-auto">
-                    <section>
-                        <h2 className="text-lg font-semibold text-slate-300 mb-4">Speakers ({room.speakers.length})</h2>
-                        <div className="flex flex-wrap gap-4">
-                            {room.speakers.map(s => <SpeakerCard key={s.id} user={s} isHost={s.id === room.host.id} onClick={() => onNavigate(AppView.PROFILE, { username: s.username })} />)}
-                        </div>
-                    </section>
-                     <section>
-                        <h2 className="text-lg font-semibold text-slate-300 mb-4">Listeners ({room.listeners.length})</h2>
-                        <div className="flex flex-wrap gap-4">
-                            {room.listeners.map(l => <ListenerCard key={l.id} user={l} onClick={() => onNavigate(AppView.PROFILE, { username: l.username })}/>)}
-                        </div>
-                    </section>
-                </div>
-                
-                <div className="flex-shrink-0 h-1/3 max-h-64 border-t border-slate-700 flex flex-col bg-black/20">
-                    <div ref={messagesContainerRef} className="flex-grow overflow-y-auto p-2 space-y-2">
-                        {messages.map(msg => (
-                            <div key={msg.id} className="flex items-start gap-2 text-sm max-w-full">
-                                <img src={msg.sender.avatarUrl} className="w-6 h-6 rounded-full flex-shrink-0"/>
-                                <div className="flex-shrink min-w-0">
-                                    <span className="font-semibold text-slate-400 mr-1.5">{msg.sender.name}:</span>
-                                    <span className="text-slate-200 break-words whitespace-pre-wrap">{msg.text}</span>
-                                </div>
-                            </div>
-                        ))}
+            <main ref={mainContentRef} className="flex-grow overflow-y-auto p-4 space-y-6">
+                <section>
+                    <h2 className="text-lg font-semibold text-slate-300 mb-4">Speakers ({room.speakers.length})</h2>
+                    <div className="flex flex-wrap gap-4">
+                        {room.speakers.map(s => <SpeakerCard key={s.id} user={s} isHost={s.id === room.host.id} onClick={() => onNavigate(AppView.PROFILE, { username: s.username })} />)}
                     </div>
-                </div>
-            </div>
+                </section>
+                <section>
+                    <h2 className="text-lg font-semibold text-slate-300 mb-4">Listeners ({room.listeners.length})</h2>
+                    <div className="flex flex-wrap gap-4">
+                        {room.listeners.map(l => <ListenerCard key={l.id} user={l} onClick={() => onNavigate(AppView.PROFILE, { username: l.username })}/>)}
+                    </div>
+                </section>
+                <section className="border-t border-slate-700 pt-4">
+                    <h2 className="text-lg font-semibold text-slate-300 mb-4">Live Chat</h2>
+                    <div className="space-y-4">
+                       {messages.map(msg => <Message key={msg.id} message={msg} />)}
+                       <div ref={messagesEndRef} />
+                    </div>
+               </section>
+            </main>
 
             <footer className="flex-shrink-0 p-2 bg-black/30 border-t border-slate-700">
                 <div className="relative">
