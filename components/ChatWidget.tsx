@@ -19,7 +19,7 @@ interface ChatWidgetProps {
 }
 
 enum RecordingState { IDLE, RECORDING, PREVIEW }
-const EMOJI_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+const EMOJI_REACTIONS = ['❤️', '🥰', '😍', '😂', '😮', '👍', '😢', '😡', '🤔', '🔥', '🎉', '🙏'];
 const EMOJI_REGEX = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
 
 const isJumboEmoji = (text: string | undefined): boolean => {
@@ -114,7 +114,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentUser, peerUser, onClose,
   const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.IDLE);
   const [audioPreview, setAudioPreview] = useState<{ url: string, blob: Blob, duration: number } | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -136,7 +136,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentUser, peerUser, onClose,
 
   useEffect(() => {
     if (!isMinimized) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
       firebaseService.markMessagesAsRead(chatId, currentUser.id);
     }
   }, [messages, isMinimized, chatId, currentUser.id]);
@@ -319,7 +321,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentUser, peerUser, onClose,
           </button>
         </div>
       </header>
-      <main className="relative flex-grow overflow-y-auto p-3 space-y-4 flex flex-col">
+      <main ref={scrollContainerRef} className="relative flex-grow overflow-y-auto p-3 space-y-4 flex flex-col">
         {showHeartAnimation && <HeartAnimation />}
         {messages.map((msg) => (
             <MessageBubble
@@ -331,7 +333,6 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentUser, peerUser, onClose,
                 onUnsend={handleUnsend}
             />
         ))}
-        <div ref={messagesEndRef} />
       </main>
       <footer className="p-2 border-t border-slate-700">
         {replyingTo && (
