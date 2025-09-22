@@ -32,7 +32,10 @@ export default async function handler(request: Request) {
     });
   }
 
-  const { searchParams } = new URL(request.url);
+  const protocol = request.headers['x-forwarded-proto'] || 'https';
+  const host = request.headers['x-forwarded-host'] || request.headers.host;
+  const fullUrl = new URL(request.url!, `${protocol}://${host}`);
+  const { searchParams } = fullUrl;
   const channelName = searchParams.get('channelName');
   const uidStr = searchParams.get('uid');
 
