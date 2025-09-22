@@ -1,12 +1,11 @@
-// This file acts as a serverless function on Vercel to proxy requests
-// to the Agora token server, bypassing browser CORS restrictions.
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 export const config = {
   runtime: 'edge',
 };
 
 export default async function handler(request: Request) {
-  // Add CORS headers for the preflight OPTIONS request
+  // CORS preflight request
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -18,58 +17,71 @@ export default async function handler(request: Request) {
     });
   }
 
-  const { searchParams } = new URL(request.url);
-  const channelName = searchParams.get('channelName');
-  const uid = searchParams.get('uid');
+  // Set response headers
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+  };
 
-  if (!channelName || !uid) {
-    return new Response(JSON.stringify({ error: 'channelName and uid are required' }), {
-      status: 400,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+  // Get APP_ID and APP_CERTIFICATE from environment variables
+  // The user will need to set these in their Vercel project settings.
+  const APP_ID = process.env.AGORA_APP_ID;
+  const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
+
+  if (!APP_ID || !APP_CERTIFICATE) {
+    console.error('Agora App ID or Certificate is not set in environment variables.');
+    return new Response(JSON.stringify({ error: 'Agora credentials not configured on the server.' }), {
+      status: 500,
+      headers,
     });
   }
 
-  // Point to the user's specified Agora token server.
-  const tokenServerUrl = `https://agora-nine-swart.vercel.app/api/token?channelName=${channelName}&uid=${uid}`;
+  const { searchParams } = new URL(request.url);
+  const channelName = searchParams.get('channelName');
+  const uidStr = searchParams.get('uid');
 
+  if (!channelName || !uidStr) {
+    return new Response(JSON.stringify({ error: 'channelName and uid are required' }), {
+      status: 400,
+      headers,
+    });
+  }
+
+  const uid = parseInt(uidStr, 10);
+  if (isNaN(uid)) {
+      return new Response(JSON.stringify({ error: 'uid must be an integer' }), {
+          status: 400,
+          headers,
+      });
+  }
+
+  // Set role and expiration time
+  const role = RtcRole.PUBLISHER;
+  const expireTime = 3600; // 1 hour
+  const currentTime = Math.floor(Date.now() / 1000);
+  const privilegeExpireTime = currentTime + expireTime;
+
+  // Build the token
   try {
-    const tokenResponse = await fetch(tokenServerUrl);
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      APP_ID,
+      APP_CERTIFICATE,
+      channelName,
+      uid,
+      role,
+      privilegeExpireTime
+    );
 
-    if (!tokenResponse.ok) {
-       const errorText = await tokenResponse.text();
-       console.error(`Token server error: ${tokenResponse.status} ${errorText}`);
-       return new Response(JSON.stringify({ error: 'Failed to fetch token from upstream server' }), {
-         status: tokenResponse.status,
-         headers: { 
-           'Content-Type': 'application/json',
-           'Access-Control-Allow-Origin': '*',
-          },
-       });
-    }
-
-    const data = await tokenResponse.json();
-
-    // Return the response from the token server, adding our own CORS headers
-    return new Response(JSON.stringify(data), {
+    // Return the token
+    return new Response(JSON.stringify({ rtcToken: token }), {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*', // Allow any origin to access this proxy
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
+      headers,
     });
   } catch (error) {
-    console.error('Proxy fetch error:', error);
-    return new Response(JSON.stringify({ error: 'Internal Server Error in proxy' }), {
+    console.error('Error generating Agora token:', error);
+    return new Response(JSON.stringify({ error: 'Failed to generate Agora token' }), {
       status: 500,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-       },
+      headers,
     });
   }
 }
