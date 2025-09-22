@@ -1395,7 +1395,7 @@ listenToLiveAudioRooms(callback: (rooms: LiveAudioRoom[]) => void) {
     });
 },
 listenToLiveAudioRoomMessages(roomId: string, callback: (messages: LiveAudioRoomMessage[]) => void) {
-    const q = db.collection('liveAudioRooms').doc(roomId).collection('messages').orderBy('createdAt', 'asc').limitToLast(50);
+    const q = db.collection('liveAudioRooms').doc(roomId).collection('messages').orderBy('createdAt', 'asc').limitToLast(250);
     return q.onSnapshot(snapshot => {
         const messages = snapshot.docs.map(doc => {
             const data = doc.data();
