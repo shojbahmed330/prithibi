@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppView, LiveAudioRoom, LiveAudioRoomMessage, User } from '../types';
 import { geminiService } from '../services/geminiService';
 import Icon from './Icon';
@@ -132,6 +132,19 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const isSpeaker = room?.speakers.some(s => s.id === currentUser.id);
     const hasRaisedHand = room?.raisedHands.includes(currentUser.id);
 
+    const uidMap = useMemo(() => {
+        if (!room) return new Map<number, string>();
+        const map = new Map<number, string>();
+        [...(room.speakers || []), ...(room.listeners || [])].forEach(user => {
+            if (user && user.id) {
+                const numericUid = parseInt(user.id, 36) % 10000000;
+                map.set(numericUid, user.id);
+            }
+        });
+        return map;
+    }, [room]);
+
+
     useEffect(() => {
         setIsLoading(true);
         geminiService.joinLiveAudioRoom(currentUser.id, roomId);
@@ -158,13 +171,17 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
 
         client.on('volume-indicator', (volumes) => {
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max, { level: 0 });
-            if (mainSpeaker.level > 10) setActiveSpeakerId(mainSpeaker.uid.toString());
+            if (mainSpeaker.level > 10) {
+                const firebaseId = uidMap.get(mainSpeaker.uid as number);
+                setActiveSpeakerId(firebaseId || null);
+            }
             else setActiveSpeakerId(null);
         });
 
         const joinAgora = async () => {
-             const token = await geminiService.getAgoraToken(roomId, currentUser.id);
-             await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+             const uid = parseInt(currentUser.id, 36) % 10000000;
+             const token = await geminiService.getAgoraToken(roomId, uid);
+             await client.join(AGORA_APP_ID, roomId, token, uid);
              client.enableAudioVolumeIndicator();
         };
 
@@ -178,7 +195,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             localAudioTrack.current?.close();
             agoraClient.current?.leave();
         };
-    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage]);
+    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage, uidMap]);
     
     useEffect(() => {
         const publishAudio = async () => {

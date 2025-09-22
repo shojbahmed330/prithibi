@@ -99,6 +99,21 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const [localVideoTrackState, setLocalVideoTrackState] = useState<ICameraVideoTrack | null>(null); // For re-rendering
     const { language } = useSettings();
 
+    const uidMap = useMemo(() => {
+        if (!room) return new Map<number, string>();
+        const map = new Map<number, string>();
+        (room.participants || []).forEach(user => {
+            if (user && user.id) {
+                const numericUid = parseInt(user.id, 36) % 10000000;
+                map.set(numericUid, user.id);
+            }
+        });
+        // Add current user as well, as they are not in the participants list from DB initially
+        const numericUid = parseInt(currentUser.id, 36) % 10000000;
+        map.set(numericUid, currentUser.id);
+        return map;
+    }, [room, currentUser.id]);
+
     // Agora Lifecycle Management
     useEffect(() => {
         if (!AGORA_APP_ID) {
@@ -134,7 +149,8 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             };
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max);
             if (mainSpeaker.level > 5) { // Threshold to avoid flickering
-                setActiveSpeakerId(mainSpeaker.uid.toString());
+                const firebaseId = uidMap.get(mainSpeaker.uid as number);
+                setActiveSpeakerId(firebaseId || null);
             } else {
                 setActiveSpeakerId(null);
             }
@@ -148,11 +164,12 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
                 client.enableAudioVolumeIndicator();
                 client.on('volume-indicator', handleVolumeIndicator);
 
-                const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+                const uid = parseInt(currentUser.id, 36) % 10000000;
+                const token = await geminiService.getAgoraToken(roomId, uid);
                 if (!token) {
                     throw new Error("Failed to retrieve Agora token. The video call cannot proceed.");
                 }
-                await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+                await client.join(AGORA_APP_ID, roomId, token, uid);
 
                 const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
                 localAudioTrack.current = audioTrack;
@@ -189,7 +206,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             client.leave();
             geminiService.leaveLiveVideoRoom(currentUser.id, roomId);
         };
-    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language]);
+    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language, uidMap]);
     
     // Firestore real-time listener for Room Metadata
     useEffect(() => {
