@@ -907,7 +907,7 @@ export const firebaseService = {
     },
 
     listenToMessages(chatId: string, callback: (messages: Message[]) => void): () => void {
-        const messagesRef = db.collection('chats').doc(chatId).collection('messages').orderBy('createdAt', 'asc');
+        const messagesRef = db.collection('chats').doc(chatId).collection('messages').orderBy('createdAt').limitToLast(250);
         return messagesRef.onSnapshot(snapshot => {
             const messages = snapshot.docs.map(doc => {
                 const data = doc.data();
