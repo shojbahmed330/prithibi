@@ -32,6 +32,7 @@ export default async function handler(request: Request) {
     });
   }
 
+  // Point to the user's specified Agora token server.
   const tokenServerUrl = `https://agora-nine-swart.vercel.app/api/token?channelName=${channelName}&uid=${uid}`;
 
   try {
