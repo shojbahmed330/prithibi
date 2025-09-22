@@ -14,18 +14,6 @@ interface LiveVideoRoomScreenProps {
   onSetTtsMessage: (message: string) => void;
 }
 
-// Consistent numeric UID generation
-const stringToNumericUid = (uid: string): number => {
-    let hash = 0;
-    for (let i = 0; i < uid.length; i++) {
-        const char = uid.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash); // Agora UIDs must be positive 32-bit integers.
-};
-
-
 // Participant Video Component
 const ParticipantVideo: React.FC<{
     participant: VideoParticipantState;
@@ -103,7 +91,6 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-    const [uidMap, setUidMap] = useState(new Map<number, string>());
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -120,7 +107,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             return;
         }
 
-        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8', agoraProxy: true });
         agoraClient.current = client;
 
         const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
@@ -146,9 +133,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             };
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max);
             if (mainSpeaker.level > 5) { // Threshold to avoid flickering
-                const speakerNumericUid = mainSpeaker.uid as number;
-                const speakerFirebaseUid = uidMap.get(speakerNumericUid);
-                setActiveSpeakerId(speakerFirebaseUid || null);
+                setActiveSpeakerId(mainSpeaker.uid as string);
             } else {
                 setActiveSpeakerId(null);
             }
@@ -162,12 +147,11 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
                 client.enableAudioVolumeIndicator();
                 client.on('volume-indicator', handleVolumeIndicator);
 
-                const numericUid = stringToNumericUid(currentUser.id);
-                const token = await geminiService.getAgoraToken(roomId, numericUid);
+                const token = await geminiService.getAgoraToken(roomId, currentUser.id);
                 if (!token) {
                     throw new Error("Failed to retrieve Agora token. The video call cannot proceed.");
                 }
-                await client.join(AGORA_APP_ID, roomId, token, numericUid);
+                await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
 
                 const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
                 localAudioTrack.current = audioTrack;
@@ -204,7 +188,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             client.leave();
             geminiService.leaveLiveVideoRoom(currentUser.id, roomId);
         };
-    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language, uidMap]);
+    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language]);
     
     // Firestore real-time listener for Room Metadata
     useEffect(() => {
@@ -212,11 +196,6 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
         const unsubscribe = geminiService.listenToVideoRoom(roomId, (roomDetails) => {
             if (roomDetails) {
                 setRoom(roomDetails);
-                 const newMap = new Map<number, string>();
-                [...roomDetails.participants].forEach(p => {
-                    if (p) newMap.set(stringToNumericUid(p.id), p.id);
-                });
-                setUidMap(newMap);
             } else {
                 onGoBack(); // Room has ended or doesn't exist
             }
@@ -243,13 +222,10 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const remoteUsersMap = useMemo(() => {
         const map: { [key: string]: IAgoraRTCRemoteUser } = {};
         remoteUsers.forEach(user => {
-            const firebaseUid = uidMap.get(user.uid as number);
-            if (firebaseUid) {
-                map[firebaseUid] = user;
-            }
+            map[user.uid as string] = user;
         });
         return map;
-    }, [remoteUsers, uidMap]);
+    }, [remoteUsers]);
     
     if (isLoading || !room) {
         return <div className="h-full w-full flex items-center justify-center bg-slate-900 text-white">Loading Video Room...</div>;

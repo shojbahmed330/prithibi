@@ -16,18 +16,6 @@ interface LiveRoomScreenProps {
 
 const EMOJI_REACTIONS = ['❤️', '😂', '👍', '😢', '😡', '🔥', '🎉', '🙏'];
 
-// Consistent numeric UID generation
-const stringToNumericUid = (uid: string): number => {
-    let hash = 0;
-    for (let i = 0; i < uid.length; i++) {
-        const char = uid.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash); // Agora UIDs must be positive 32-bit integers.
-};
-
-
 const ParticipantActionModal: React.FC<{
     targetUser: User;
     room: LiveAudioRoom;
@@ -132,7 +120,6 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [isMuted, setIsMuted] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
     const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
-    const [uidMap, setUidMap] = useState(new Map<number, string>());
     const [handRaisedOptimistic, setHandRaisedOptimistic] = useState(false);
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
@@ -140,8 +127,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
-    const numericUidRef = useRef<number | null>(null);
-
+    
     const isHost = room?.host.id === currentUser.id;
     const isCoHost = room?.coHosts?.some(c => c.id === currentUser.id);
     const isAdmin = isHost || isCoHost;
@@ -166,13 +152,6 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     return;
                 }
                 setRoom(roomDetails);
-
-                const newMap = new Map<number, string>();
-                [...roomDetails.speakers, ...roomDetails.listeners, roomDetails.host].forEach(p => {
-                    if (p) newMap.set(stringToNumericUid(p.id), p.id);
-                });
-                setUidMap(newMap);
-
             } else {
                 onSetTtsMessage("The room has ended.");
                 onGoBack();
@@ -182,7 +161,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
 
         const unsubMessages = geminiService.listenToLiveAudioRoomMessages(roomId, setMessages);
 
-        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8', agoraProxy: true });
         agoraClient.current = client;
 
         client.on('user-published', async (user, mediaType) => {
@@ -193,30 +172,37 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
         });
 
         client.on('volume-indicator', (volumes) => {
+            if (volumes.length === 0) {
+                setActiveSpeakerId(null);
+                return;
+            }
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max, { level: 0 });
             if (mainSpeaker.level > 10) {
-                const speakerNumericUid = mainSpeaker.uid as number;
-                const speakerFirebaseUid = uidMap.get(speakerNumericUid);
-                setActiveSpeakerId(speakerFirebaseUid || null);
+                setActiveSpeakerId(mainSpeaker.uid as string);
             }
             else setActiveSpeakerId(null);
         });
 
         const joinAgora = async () => {
-             const numericUid = stringToNumericUid(currentUser.id);
-             numericUidRef.current = numericUid;
-
-             const token = await geminiService.getAgoraToken(roomId, numericUid);
+             const token = await geminiService.getAgoraToken(roomId, currentUser.id);
              if (!token) {
                  onSetTtsMessage("Could not get audio token. Please try again.");
                  onGoBack();
                  return;
              }
-             await client.join(AGORA_APP_ID, roomId, token, numericUid);
+             await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
              client.enableAudioVolumeIndicator();
         };
 
-        joinAgora();
+        joinAgora().catch(err => {
+            console.error("Agora Join Error:", err);
+            if (err.code === 'UID_CONFLICT') {
+                onSetTtsMessage("Error: You might already be in this room in another tab. Please close it and try again.");
+            } else {
+                onSetTtsMessage("Could not connect to the audio room.");
+            }
+            onGoBack();
+        });
         
         return () => {
             unsubRoom();

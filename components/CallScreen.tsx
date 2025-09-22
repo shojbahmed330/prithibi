@@ -16,17 +16,6 @@ interface CallScreenProps {
   onSetTtsMessage: (message: string) => void;
 }
 
-// Consistent numeric UID generation
-const stringToNumericUid = (uid: string): number => {
-    let hash = 0;
-    for (let i = 0; i < uid.length; i++) {
-        const char = uid.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash); // Agora UIDs must be positive 32-bit integers.
-};
-
 const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, isCaller, onGoBack, onSetTtsMessage }) => {
     const [call, setCall] = useState<Call | null>(null);
     const [isMuted, setIsMuted] = useState(false);
@@ -100,7 +89,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, 
     // Agora Lifecycle
     useEffect(() => {
         const setupAgora = async (callType: 'audio' | 'video') => {
-            const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+            const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8', agoraProxy: true });
             agoraClient.current = client;
 
             client.on('user-published', async (user, mediaType) => {
@@ -119,12 +108,11 @@ const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, 
                 firebaseService.updateCallStatus(callId, 'ended');
             });
             
-            const numericUid = stringToNumericUid(currentUser.id);
-            const token = await geminiService.getAgoraToken(callId, numericUid);
+            const token = await geminiService.getAgoraToken(callId, currentUser.id);
             if (!token) {
                 throw new Error("Failed to retrieve Agora token. The call cannot proceed.");
             }
-            await client.join(AGORA_APP_ID, callId, token, numericUid);
+            await client.join(AGORA_APP_ID, callId, token, currentUser.id);
 
             try {
                 const tracksToPublish: (IMicrophoneAudioTrack | ICameraVideoTrack)[] = [];
