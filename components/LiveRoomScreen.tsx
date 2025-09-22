@@ -119,6 +119,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [selectedParticipant, setSelectedParticipant] = useState<User | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+    const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -240,6 +241,15 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
         localAudioTrack.current?.setMuted(newMutedState);
         setIsMuted(newMutedState);
     }
+
+    const triggerFloatingEmoji = (emoji: string) => {
+        const newEmoji = { id: Date.now() + Math.random(), emoji, x: Math.random() * 80 + 10 };
+        setFloatingEmojis(current => [...current, newEmoji]);
+        setTimeout(() => {
+            setFloatingEmojis(current => current.filter(e => e.id !== newEmoji.id));
+        }, 3000); // Animation duration
+        setEmojiPickerOpen(false);
+    };
     
     if (isLoading || !room) {
         return <div className="h-full w-full flex items-center justify-center bg-slate-900 text-white">Loading Room...</div>;
@@ -264,8 +274,15 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 </button>
             </header>
 
-            <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
-                <main className="flex-grow overflow-y-auto p-4 space-y-6 md:w-2/3 md:border-r md:border-slate-700">
+            <div className="flex-grow flex flex-col-reverse md:flex-row overflow-hidden">
+                <main className="flex-grow overflow-y-auto p-4 space-y-6 md:w-2/3 md:border-r md:border-slate-700 relative">
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+                        {floatingEmojis.map(({ id, emoji, x }) => (
+                            <span key={id} className="floating-reaction absolute bottom-0 text-4xl" style={{ left: `${x}%` }}>
+                                {emoji}
+                            </span>
+                        ))}
+                    </div>
                     <section>
                         <h2 className="text-lg font-semibold text-slate-300 mb-4 px-2">Speakers ({room.speakers.length})</h2>
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -279,37 +296,49 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                         </div>
                     </section>
                 </main>
-                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50">
+                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50 flex-shrink-0 h-48 md:h-auto">
                      <h2 className="text-lg font-semibold text-slate-300 p-4 border-b border-slate-700 flex-shrink-0">Live Chat</h2>
-                     <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                     <div className="flex-grow overflow-y-auto p-4 space-y-4 no-scrollbar">
                         {messages.map(msg => <Message key={msg.id} message={msg} />)}
                         <div ref={messagesEndRef} />
-                     </div>
-                     <div className="p-2 border-t border-slate-700 flex-shrink-0">
-                        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                             <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Send a message..." className="w-full bg-slate-700 rounded-full py-2 px-4 text-sm focus:ring-lime-500 focus:border-lime-500"/>
-                             <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-lime-600 text-black hover:bg-lime-500 disabled:bg-slate-500"><Icon name="paper-airplane" className="w-5 h-5"/></button>
-                        </form>
                      </div>
                 </aside>
             </div>
 
-            <footer className="flex-shrink-0 p-2 bg-black/30 border-t border-slate-700 flex justify-center items-center gap-4 h-20">
-                {isSpeaker && (
-                    <button onClick={toggleMute} className={`p-4 rounded-full transition-colors ${isMuted ? 'bg-red-600' : 'bg-slate-600 hover:bg-slate-500'}`}>
-                        <Icon name={isMuted ? 'microphone-slash' : 'mic'} className="w-6 h-6" />
-                    </button>
-                )}
-                {!isSpeaker && (
-                    <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`py-3 px-6 rounded-full font-semibold flex items-center gap-2 transition-colors ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
-                        <span className="text-xl">✋</span> Raise Hand
-                    </button>
-                )}
-                {isAdmin && (
-                     <button onClick={handleMuteAll} className="p-4 rounded-full bg-slate-600 hover:bg-slate-500">
-                        <Icon name="microphone-slash" className="w-6 h-6" />
-                    </button>
-                )}
+            <footer className="flex-shrink-0 p-2 bg-black/30 border-t border-slate-700">
+                <div className="flex items-center gap-2">
+                    {isSpeaker && (
+                        <button onClick={toggleMute} className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-red-600' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                            <Icon name={isMuted ? 'microphone-slash' : 'mic'} className="w-5 h-5" />
+                        </button>
+                    )}
+                     {!isSpeaker && (
+                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`p-3 rounded-full text-2xl transition-colors ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                            ✋
+                        </button>
+                    )}
+                     {isAdmin && (
+                         <button onClick={handleMuteAll} className="p-3 rounded-full bg-slate-600 hover:bg-slate-500" title="Mute All Speakers">
+                            <Icon name="microphone-slash" className="w-5 h-5" />
+                        </button>
+                    )}
+                    <form onSubmit={handleSendMessage} className="flex-grow flex items-center gap-2 relative">
+                         <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Send a message..." className="w-full bg-slate-700 rounded-full py-2 pl-4 pr-12 text-sm focus:ring-lime-500 focus:border-lime-500"/>
+                         <div className="absolute right-12" ref={emojiPickerRef}>
+                            <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} className="p-2 rounded-full text-slate-300 hover:bg-slate-600">
+                                <Icon name="face-smile" className="w-5 h-5"/>
+                            </button>
+                             {isEmojiPickerOpen && (
+                                <div className="absolute bottom-full right-0 mb-2 bg-slate-900/90 backdrop-blur-sm border border-lime-500/20 rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg w-48">
+                                    {EMOJI_REACTIONS.map(emoji => (
+                                        <button key={emoji} type="button" onClick={() => triggerFloatingEmoji(emoji)} className="text-2xl p-1 rounded-md hover:bg-slate-700 aspect-square flex items-center justify-center">{emoji}</button>
+                                    ))}
+                                </div>
+                            )}
+                         </div>
+                         <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-lime-600 text-black hover:bg-lime-500 disabled:bg-slate-500"><Icon name="paper-airplane" className="w-5 h-5"/></button>
+                    </form>
+                </div>
             </footer>
              {selectedParticipant && <ParticipantActionModal targetUser={selectedParticipant} room={room} currentUser={currentUser} onClose={() => setSelectedParticipant(null)} />}
         </div>
