@@ -1,4 +1,5 @@
-import { AccessToken, RtcRole, Privileges } from 'agora-token';
+import agoraToken from 'agora-token';
+const { AccessToken, RtcRole, Privileges } = agoraToken;
 
 export default async function handler(request: Request) {
   // CORS preflight request
@@ -13,8 +14,6 @@ export default async function handler(request: Request) {
     });
   }
 
-  console.log('[Agora Token] Function execution started.');
-
   // Set response headers
   const headers = {
     'Content-Type': 'application/json',
@@ -24,9 +23,6 @@ export default async function handler(request: Request) {
   // Get APP_ID and APP_CERTIFICATE from environment variables
   const APP_ID = process.env.AGORA_APP_ID;
   const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
-
-  console.log(`[Agora Token] Found AGORA_APP_ID: ${!!APP_ID}`);
-  console.log(`[Agora Token] Found AGORA_APP_CERTIFICATE: ${!!APP_CERTIFICATE}`);
 
   if (!APP_ID || !APP_CERTIFICATE) {
     console.error('[Agora Token] Error: Agora App ID or Certificate is not set in environment variables.');
@@ -61,10 +57,7 @@ export default async function handler(request: Request) {
   const privilegeExpireTime = currentTime + expireTime;
 
   try {
-    console.log(`[Agora Token] Attempting to generate token with Channel: ${channelName}, UID: ${uid}`);
     const accessToken = new AccessToken(APP_ID, APP_CERTIFICATE, channelName, uid.toString());
-    console.log('[Agora Token] AccessToken object created successfully.');
-
     accessToken.addPrivilege(Privileges.kJoinChannel, privilegeExpireTime);
 
     if (role === RtcRole.PUBLISHER) {
@@ -72,11 +65,8 @@ export default async function handler(request: Request) {
         accessToken.addPrivilege(Privileges.kPublishVideoStream, privilegeExpireTime);
         accessToken.addPrivilege(Privileges.kPublishDataStream, privilegeExpireTime);
     }
-    console.log('[Agora Token] Privileges added.');
 
-    console.log('[Agora Token] Building the token...');
     const token = accessToken.build();
-    console.log('[Agora Token] Token built successfully.');
 
     return new Response(JSON.stringify({ rtcToken: token }), {
       status: 200,
