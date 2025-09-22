@@ -13,6 +13,8 @@ export default async function handler(request: Request) {
     });
   }
 
+  console.log('[Agora Token] Function execution started.');
+
   // Set response headers
   const headers = {
     'Content-Type': 'application/json',
@@ -20,12 +22,14 @@ export default async function handler(request: Request) {
   };
 
   // Get APP_ID and APP_CERTIFICATE from environment variables
-  // The user will need to set these in their Vercel project settings.
   const APP_ID = process.env.AGORA_APP_ID;
   const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 
+  console.log(`[Agora Token] Found AGORA_APP_ID: ${!!APP_ID}`);
+  console.log(`[Agora Token] Found AGORA_APP_CERTIFICATE: ${!!APP_CERTIFICATE}`);
+
   if (!APP_ID || !APP_CERTIFICATE) {
-    console.error('Agora App ID or Certificate is not set in environment variables.');
+    console.error('[Agora Token] Error: Agora App ID or Certificate is not set in environment variables.');
     return new Response(JSON.stringify({ error: 'Agora credentials not configured on the server.' }), {
       status: 500,
       headers,
@@ -43,7 +47,6 @@ export default async function handler(request: Request) {
     });
   }
 
-  // UID can be 0. If it is 0, the Agora server assigns a UID.
   const uid = parseInt(uidStr, 10);
   if (isNaN(uid)) {
       return new Response(JSON.stringify({ error: 'uid must be an integer' }), {
@@ -52,36 +55,42 @@ export default async function handler(request: Request) {
       });
   }
 
-  // Set role and expiration time
   const role = RtcRole.PUBLISHER;
   const expireTime = 3600; // 1 hour
   const currentTime = Math.floor(Date.now() / 1000);
   const privilegeExpireTime = currentTime + expireTime;
 
-  // Build the token using AccessToken class
   try {
+    console.log(`[Agora Token] Attempting to generate token with Channel: ${channelName}, UID: ${uid}`);
     const accessToken = new AccessToken(APP_ID, APP_CERTIFICATE, channelName, uid.toString());
+    console.log('[Agora Token] AccessToken object created successfully.');
+
     accessToken.addPrivilege(Privileges.kJoinChannel, privilegeExpireTime);
 
-    // As a publisher, you can also grant privileges to publish streams
     if (role === RtcRole.PUBLISHER) {
         accessToken.addPrivilege(Privileges.kPublishAudioStream, privilegeExpireTime);
         accessToken.addPrivilege(Privileges.kPublishVideoStream, privilegeExpireTime);
         accessToken.addPrivilege(Privileges.kPublishDataStream, privilegeExpireTime);
     }
+    console.log('[Agora Token] Privileges added.');
 
+    console.log('[Agora Token] Building the token...');
     const token = accessToken.build();
+    console.log('[Agora Token] Token built successfully.');
 
-    // Return the token
     return new Response(JSON.stringify({ rtcToken: token }), {
       status: 200,
       headers,
     });
   } catch (error) {
-    console.error('Error generating Agora token:', error);
-    return new Response(JSON.stringify({ error: 'Failed to generate Agora token' }), {
-      status: 500,
-      headers,
+    console.error('[Agora Token] Caught an error during token generation:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new Response(JSON.stringify({
+        error: 'Failed to generate Agora token internally.',
+        details: errorMessage
+    }), {
+        status: 500,
+        headers
     });
   }
 }
