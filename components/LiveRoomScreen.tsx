@@ -13,6 +13,48 @@ interface LiveRoomScreenProps {
 
 const EMOJI_REACTIONS = ['❤️', '😂', '👍', '😢', '😡', '🔥', '🎉', '🙏'];
 
+const ParticipantActionModal: React.FC<{
+    targetUser: User;
+    room: LiveAudioRoom;
+    currentUser: User;
+    onClose: () => void;
+}> = ({ targetUser, room, currentUser, onClose }) => {
+    const isHost = room.host.id === currentUser.id;
+    if (!isHost || targetUser.id === currentUser.id) return null; // Only host can see this, and not for themselves
+
+    const isTargetSpeaker = room.speakers.some(s => s.id === targetUser.id);
+    const hasRaisedHand = room.raisedHands.includes(targetUser.id);
+
+    const handleInviteToSpeak = () => {
+        geminiService.inviteToSpeakInAudioRoom(currentUser.id, targetUser.id, room.id);
+        onClose();
+    };
+
+    const handleMoveToAudience = () => {
+        geminiService.moveToAudienceInAudioRoom(currentUser.id, targetUser.id, room.id);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-4 flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                <img src={targetUser.avatarUrl} alt={targetUser.name} className="w-20 h-20 rounded-full mb-3" />
+                <h3 className="text-xl font-bold">{targetUser.name}</h3>
+                <div className="w-full mt-4 space-y-2">
+                    {hasRaisedHand && !isTargetSpeaker && (
+                         <button onClick={handleInviteToSpeak} className="w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-lg">Invite to Speak</button>
+                    )}
+                    {isTargetSpeaker && targetUser.id !== room.host.id && (
+                         <button onClick={handleMoveToAudience} className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-semibold py-3 rounded-lg">Move to Audience</button>
+                    )}
+                    <button onClick={onClose} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-semibold py-3 rounded-lg mt-2">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const SpeakerCard: React.FC<{ user: User; isHost: boolean; onClick: () => void }> = ({ user, isHost, onClick }) => (
     <button onClick={onClick} className="flex flex-col items-center gap-2 w-24 text-center">
         <div className="relative">
@@ -23,9 +65,12 @@ const SpeakerCard: React.FC<{ user: User; isHost: boolean; onClick: () => void }
     </button>
 );
 
-const ListenerCard: React.FC<{ user: User; onClick: () => void }> = ({ user, onClick }) => (
-     <button onClick={onClick} className="flex flex-col items-center gap-1 w-20 text-center">
+const ListenerCard: React.FC<{ user: User; isHostView: boolean; hasRaisedHand: boolean; onClick: () => void }> = ({ user, isHostView, hasRaisedHand, onClick }) => (
+     <button onClick={onClick} className="flex flex-col items-center gap-1 w-20 text-center relative">
         <img src={user.avatarUrl} alt={user.name} title={user.name} className="w-12 h-12 rounded-full ring-2 ring-slate-700" />
+        {isHostView && hasRaisedHand && (
+            <div className="absolute top-0 right-0 bg-blue-500 p-1 rounded-full animate-pulse">✋</div>
+        )}
         <p className="font-medium text-xs truncate w-full text-slate-300">{user.name}</p>
     </button>
 );
@@ -50,14 +95,15 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [isLoading, setIsLoading] = useState(true);
     const [newMessage, setNewMessage] = useState('');
     const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
+    const [selectedParticipant, setSelectedParticipant] = useState<User | null>(null);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const mainContentRef = useRef<HTMLElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
 
     const isHost = room?.host.id === currentUser.id;
     const isSpeaker = room?.speakers.some(s => s.id === currentUser.id);
-    const isListener = !isSpeaker && !isHost;
+    const isListener = !isSpeaker;
+    const hasRaisedHand = room?.raisedHands.includes(currentUser.id);
 
     useEffect(() => {
         setIsLoading(true);
@@ -83,14 +129,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     }, [roomId, onGoBack, currentUser.id, onSetTtsMessage]);
 
     useEffect(() => {
-        const mainEl = mainContentRef.current;
-        if (mainEl) {
-            // Auto-scroll only if user is already near the bottom
-            const isScrolledToBottom = mainEl.scrollHeight - mainEl.clientHeight <= mainEl.scrollTop + 150;
-            if (isScrolledToBottom) {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     useEffect(() => {
@@ -115,13 +154,14 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !room || (!isSpeaker && !isHost)) return;
+        if (!newMessage.trim() || !room) return;
         await geminiService.sendLiveAudioRoomMessage(roomId, currentUser, newMessage, isHost, !!isSpeaker);
         setNewMessage('');
         setEmojiPickerOpen(false);
     };
     
     const handleRaiseHand = () => {
+        if (hasRaisedHand) return;
         geminiService.raiseHandInAudioRoom(currentUser.id, roomId);
         onSetTtsMessage("You've raised your hand to speak.");
     }
@@ -129,6 +169,15 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const handleAddEmoji = (emoji: string) => {
         setNewMessage(prev => prev + emoji);
     }
+    
+    const handleParticipantClick = (user: User) => {
+        if (isHost) {
+            setSelectedParticipant(user);
+        } else {
+            onNavigate(AppView.PROFILE, { username: user.username });
+        }
+    }
+
 
     if (isLoading || !room) {
         return <div className="h-full w-full flex items-center justify-center bg-slate-900 text-white">Loading Room...</div>;
@@ -143,9 +192,9 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     </button>
                     <div>
                         <h1 className="text-xl font-bold truncate">{room.topic}</h1>
-                        <button onClick={() => onNavigate(AppView.ROOM_PARTICIPANTS, { roomId })} className="text-sm text-slate-400 hover:underline">
+                        <p className="text-sm text-slate-400">
                            {room.speakers.length + room.listeners.length} participant(s)
-                        </button>
+                        </p>
                     </div>
                 </div>
                 <button onClick={handleLeave} className="bg-red-600 hover:bg-red-500 font-bold py-2 px-4 rounded-lg">
@@ -153,17 +202,17 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 </button>
             </header>
 
-            <main ref={mainContentRef} className="flex-grow overflow-y-auto p-4 space-y-6">
+            <main className="flex-grow overflow-y-auto p-4 space-y-6">
                 <section>
                     <h2 className="text-lg font-semibold text-slate-300 mb-4">Speakers ({room.speakers.length})</h2>
                     <div className="flex flex-wrap gap-4">
-                        {room.speakers.map(s => <SpeakerCard key={s.id} user={s} isHost={s.id === room.host.id} onClick={() => onNavigate(AppView.PROFILE, { username: s.username })} />)}
+                        {room.speakers.map(s => <SpeakerCard key={s.id} user={s} isHost={s.id === room.host.id} onClick={() => handleParticipantClick(s)} />)}
                     </div>
                 </section>
                 <section>
                     <h2 className="text-lg font-semibold text-slate-300 mb-4">Listeners ({room.listeners.length})</h2>
                     <div className="flex flex-wrap gap-4">
-                        {room.listeners.map(l => <ListenerCard key={l.id} user={l} onClick={() => onNavigate(AppView.PROFILE, { username: l.username })}/>)}
+                        {room.listeners.map(l => <ListenerCard key={l.id} user={l} isHostView={isHost} hasRaisedHand={room.raisedHands.includes(l.id)} onClick={() => handleParticipantClick(l)}/>)}
                     </div>
                 </section>
                 <section className="border-t border-slate-700 pt-4">
@@ -186,7 +235,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     )}
                     <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                         {isListener && (
-                             <button type="button" onClick={handleRaiseHand} className="p-3 rounded-full bg-slate-600 hover:bg-slate-500">
+                             <button type="button" onClick={handleRaiseHand} disabled={hasRaisedHand} className={`p-3 rounded-full transition-colors ${hasRaisedHand ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11" /></svg>
                              </button>
                         )}
@@ -195,11 +244,10 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                                 type="text" 
                                 value={newMessage} 
                                 onChange={e => setNewMessage(e.target.value)} 
-                                placeholder={isSpeaker || isHost ? "Send a message..." : "Only speakers can chat"}
-                                disabled={!isSpeaker && !isHost}
-                                className="w-full bg-slate-700 rounded-full py-2.5 pl-4 pr-12 text-sm focus:ring-lime-500 focus:border-lime-500 disabled:cursor-not-allowed"
+                                placeholder="Send a message..."
+                                className="w-full bg-slate-700 rounded-full py-2.5 pl-4 pr-12 text-sm focus:ring-lime-500 focus:border-lime-500"
                             />
-                             <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} disabled={!isSpeaker && !isHost} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-white">
+                             <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-white">
                                 <Icon name="face-smile" className="w-5 h-5" />
                             </button>
                         </div>
@@ -209,6 +257,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     </form>
                 </div>
             </footer>
+             {selectedParticipant && <ParticipantActionModal targetUser={selectedParticipant} room={room} currentUser={currentUser} onClose={() => setSelectedParticipant(null)} />}
         </div>
     );
 };
