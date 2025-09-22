@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppView, User, VoiceState, Post, Comment, ScrollState, Notification, Campaign, Group, Story, Conversation, Call } from './types';
 import AuthScreen from './components/AuthScreen';
@@ -1081,76 +1080,80 @@ const UserApp: React.FC = () => {
       
       <main className="flex-grow overflow-hidden relative flex flex-col">
         {/* Header */}
-        <header className="flex-shrink-0 h-16 bg-black/20 backdrop-blur-md border-b border-fuchsia-500/20 z-30 hidden md:flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
-                {viewStack.length > 1 && (
-                     <button onClick={goBack} className="p-2 -ml-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
-                        <Icon name="back" className="w-6 h-6" />
-                    </button>
-                )}
-                 <form onSubmit={handleHeaderSearchSubmit} className="relative w-96">
-                    <input type="search" placeholder="Search VoiceBook..." value={headerSearchQuery} onChange={(e) => setHeaderSearchQuery(e.target.value)} className="bg-slate-800/50 border border-slate-700 text-fuchsia-300 rounded-full w-full py-2 pl-10 pr-4 focus:ring-2 focus:ring-fuchsia-500 focus:outline-none placeholder:text-fuchsia-400/50"/>
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                         <svg className="w-4 h-4 text-fuchsia-400/80" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/></svg>
-                    </div>
-                 </form>
-            </div>
-            
-             <div className="flex items-center gap-4">
-                <div className="relative" ref={notificationPanelRef}>
-                    <button onClick={handleToggleNotifications} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800 relative">
-                        <Icon name="bell" className="w-6 h-6"/>
-                        {unreadNotificationCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-900"></span>}
-                    </button>
-                    {isNotificationPanelOpen && <NotificationPanel notifications={notifications} onClose={() => setNotificationPanelOpen(false)} onNotificationClick={handleNotificationClick} />}
-                </div>
-                <div className="relative" ref={profileMenuRef}>
-                    <button onClick={() => setProfileMenuOpen(p => !p)}>
-                        <img src={user.avatarUrl} alt={user.name} className="w-10 h-10 rounded-full" />
-                    </button>
-                     {isProfileMenuOpen && (
-                        <div className="absolute top-full right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-50 text-white overflow-hidden animate-fade-in-fast">
-                            <ul>
-                                <li><button onClick={() => { setProfileMenuOpen(false); navigate(AppView.PROFILE, { username: user.username }); }} className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">View profile</button></li>
-                                {user.role === 'admin' && <li><a href="#/adminpannel" className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">Admin Panel</a></li>}
-                                <li><button onClick={() => { setProfileMenuOpen(false); navigate(AppView.SETTINGS); }} className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">Settings</button></li>
-                                <li><button onClick={handleLogout} className="w-full text-left p-3 flex items-center gap-3 text-red-400 hover:bg-red-500/10">Logout</button></li>
-                            </ul>
-                        </div>
-                     )}
-                </div>
-            </div>
-        </header>
+        {!isFullScreenView && (
+          <header className="flex-shrink-0 h-16 bg-black/20 backdrop-blur-md border-b border-fuchsia-500/20 z-30 hidden md:flex items-center justify-between px-6">
+              <div className="flex items-center gap-4">
+                  {viewStack.length > 1 && (
+                       <button onClick={goBack} className="p-2 -ml-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
+                          <Icon name="back" className="w-6 h-6" />
+                      </button>
+                  )}
+                   <form onSubmit={handleHeaderSearchSubmit} className="relative w-96">
+                      <input type="search" placeholder="Search VoiceBook..." value={headerSearchQuery} onChange={(e) => setHeaderSearchQuery(e.target.value)} className="bg-slate-800/50 border border-slate-700 text-fuchsia-300 rounded-full w-full py-2 pl-10 pr-4 focus:ring-2 focus:ring-fuchsia-500 focus:outline-none placeholder:text-fuchsia-400/50"/>
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                           <svg className="w-4 h-4 text-fuchsia-400/80" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/></svg>
+                      </div>
+                   </form>
+              </div>
+              
+               <div className="flex items-center gap-4">
+                  <div className="relative" ref={notificationPanelRef}>
+                      <button onClick={handleToggleNotifications} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800 relative">
+                          <Icon name="bell" className="w-6 h-6"/>
+                          {unreadNotificationCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-900"></span>}
+                      </button>
+                      {isNotificationPanelOpen && <NotificationPanel notifications={notifications} onClose={() => setNotificationPanelOpen(false)} onNotificationClick={handleNotificationClick} />}
+                  </div>
+                  <div className="relative" ref={profileMenuRef}>
+                      <button onClick={() => setProfileMenuOpen(p => !p)}>
+                          <img src={user.avatarUrl} alt={user.name} className="w-10 h-10 rounded-full" />
+                      </button>
+                       {isProfileMenuOpen && (
+                          <div className="absolute top-full right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-50 text-white overflow-hidden animate-fade-in-fast">
+                              <ul>
+                                  <li><button onClick={() => { setProfileMenuOpen(false); navigate(AppView.PROFILE, { username: user.username }); }} className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">View profile</button></li>
+                                  {user.role === 'admin' && <li><a href="#/adminpannel" className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">Admin Panel</a></li>}
+                                  <li><button onClick={() => { setProfileMenuOpen(false); navigate(AppView.SETTINGS); }} className="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-700/50">Settings</button></li>
+                                  <li><button onClick={handleLogout} className="w-full text-left p-3 flex items-center gap-3 text-red-400 hover:bg-red-500/10">Logout</button></li>
+                              </ul>
+                          </div>
+                       )}
+                  </div>
+              </div>
+          </header>
+        )}
         
         {/* Mobile Header */}
-        <header className="flex-shrink-0 h-14 bg-black/20 backdrop-blur-md border-b border-fuchsia-500/20 z-30 flex md:hidden items-center justify-between px-2">
-            {viewStack.length > 1 && !isMobileSearchOpen && (
-                 <button onClick={goBack} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
-                    <Icon name="back" className="w-6 h-6" />
-                </button>
-            )}
-            {!isMobileSearchOpen && <a href="#/"><Icon name="logo" className="w-8 h-8 text-fuchsia-400 ml-2" /></a>}
-            {isMobileSearchOpen && (
-                <form onSubmit={handleHeaderSearchSubmit} className="relative flex-grow mx-2">
-                    <input autoFocus type="search" placeholder="Search..." value={headerSearchQuery} onChange={(e) => setHeaderSearchQuery(e.target.value)} className="bg-slate-800 border border-slate-700 text-fuchsia-300 rounded-full w-full py-2 pl-4 pr-10 focus:ring-1 focus:ring-fuchsia-500 focus:outline-none"/>
-                     <button type="submit" className="absolute inset-y-0 right-0 flex items-center pr-3">
-                         <svg className="w-4 h-4 text-fuchsia-400/80" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/></svg>
-                    </button>
-                 </form>
-            )}
-            <div className="flex items-center gap-1">
-                <button onClick={() => setIsMobileSearchOpen(p => !p)} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
-                    {isMobileSearchOpen ? <Icon name="close" className="w-6 h-6" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
-                </button>
-                <div className="relative" ref={notificationPanelRef}>
-                    <button onClick={handleToggleNotifications} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800 relative">
-                        <Icon name="bell" className="w-6 h-6"/>
-                         {unreadNotificationCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
-                    </button>
-                     {isNotificationPanelOpen && <NotificationPanel notifications={notifications} onClose={() => setNotificationPanelOpen(false)} onNotificationClick={handleNotificationClick} />}
-                </div>
-            </div>
-        </header>
+        {!isFullScreenView && (
+          <header className="flex-shrink-0 h-14 bg-black/20 backdrop-blur-md border-b border-fuchsia-500/20 z-30 flex md:hidden items-center justify-between px-2">
+              {viewStack.length > 1 && !isMobileSearchOpen && (
+                   <button onClick={goBack} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
+                      <Icon name="back" className="w-6 h-6" />
+                  </button>
+              )}
+              {!isMobileSearchOpen && <a href="#/"><Icon name="logo" className="w-8 h-8 text-fuchsia-400 ml-2" /></a>}
+              {isMobileSearchOpen && (
+                  <form onSubmit={handleHeaderSearchSubmit} className="relative flex-grow mx-2">
+                      <input autoFocus type="search" placeholder="Search..." value={headerSearchQuery} onChange={(e) => setHeaderSearchQuery(e.target.value)} className="bg-slate-800 border border-slate-700 text-fuchsia-300 rounded-full w-full py-2 pl-4 pr-10 focus:ring-1 focus:ring-fuchsia-500 focus:outline-none"/>
+                       <button type="submit" className="absolute inset-y-0 right-0 flex items-center pr-3">
+                           <svg className="w-4 h-4 text-fuchsia-400/80" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/></svg>
+                      </button>
+                   </form>
+              )}
+              <div className="flex items-center gap-1">
+                  <button onClick={() => setIsMobileSearchOpen(p => !p)} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800">
+                      {isMobileSearchOpen ? <Icon name="close" className="w-6 h-6" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+                  </button>
+                  <div className="relative" ref={notificationPanelRef}>
+                      <button onClick={handleToggleNotifications} className="p-2 rounded-full text-fuchsia-400 hover:bg-slate-800 relative">
+                          <Icon name="bell" className="w-6 h-6"/>
+                           {unreadNotificationCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
+                      </button>
+                       {isNotificationPanelOpen && <NotificationPanel notifications={notifications} onClose={() => setNotificationPanelOpen(false)} onNotificationClick={handleNotificationClick} />}
+                  </div>
+              </div>
+          </header>
+        )}
 
         <div className="flex-grow overflow-hidden relative">
           <div className={`h-full w-full absolute inset-0 overflow-y-auto ${isFullScreenView ? '' : 'pb-32 md:pb-8'}`}>

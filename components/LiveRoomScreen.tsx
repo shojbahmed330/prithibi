@@ -517,7 +517,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 </main>
 
                 {/* --- Integrated Chat View for MOBILE ONLY --- */}
-                <div className="md:hidden flex flex-col flex-shrink-0 h-[40vh] border-t border-slate-700 bg-slate-800/50">
+                <div className="md:hidden flex flex-col flex-shrink-0 h-[60vh] border-t border-slate-700 bg-slate-800/50">
                     <div className="relative flex-grow p-4 overflow-y-auto space-y-4 z-10">
                         {showHeartAnimation && <HeartAnimation />}
                         {messages.map(msg => (
