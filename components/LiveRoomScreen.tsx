@@ -133,10 +133,12 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
     const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
     const [uidMap, setUidMap] = useState(new Map<number, string>());
+    const [handRaisedOptimistic, setHandRaisedOptimistic] = useState(false);
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
     const numericUidRef = useRef<number | null>(null);
 
@@ -144,7 +146,13 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const isCoHost = room?.coHosts?.some(c => c.id === currentUser.id);
     const isAdmin = isHost || isCoHost;
     const isSpeaker = room?.speakers.some(s => s.id === currentUser.id);
-    const hasRaisedHand = room?.raisedHands.includes(currentUser.id);
+    const hasRaisedHand = useMemo(() => room?.raisedHands.includes(currentUser.id) || handRaisedOptimistic, [room, currentUser.id, handRaisedOptimistic]);
+    
+    useEffect(() => {
+        if (room && !room.raisedHands.includes(currentUser.id)) {
+            setHandRaisedOptimistic(false);
+        }
+    }, [room, currentUser.id]);
 
     useEffect(() => {
         setIsLoading(true);
@@ -242,7 +250,14 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     }, [isSpeaker, isMuted, onSetTtsMessage]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const container = messagesContainerRef.current;
+        if (container) {
+            // Only scroll if user is near the bottom (e.g., within 150px)
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+            if (isNearBottom) {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
     }, [messages]);
 
     useEffect(() => {
@@ -272,12 +287,17 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     
     const handleRaiseHand = () => {
         if (hasRaisedHand) return;
+        setHandRaisedOptimistic(true);
         geminiService.raiseHandInAudioRoom(currentUser.id, roomId);
         onSetTtsMessage("You've raised your hand to speak.");
     }
     
     const handleMuteAll = () => {
         geminiService.muteAllSpeakersInRoom(roomId, currentUser.id);
+    }
+
+    const handleUnmuteAll = () => {
+        geminiService.unmuteAllSpeakersInRoom(roomId, currentUser.id);
     }
 
     const toggleMute = () => {
@@ -343,9 +363,9 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 </main>
 
                 {/* Chat area */}
-                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50 flex-shrink-0 h-56 md:h-auto border-t md:border-t-0 md:border-l border-slate-700">
+                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50 flex-shrink-0 h-80 md:h-auto border-t md:border-t-0 md:border-l border-slate-700">
                      <h2 className="text-lg font-semibold text-slate-300 p-4 border-b border-slate-700 flex-shrink-0">Live Chat</h2>
-                     <div className="flex-grow overflow-y-auto p-4 space-y-4 no-scrollbar">
+                     <div ref={messagesContainerRef} className="flex-grow overflow-y-auto p-4 space-y-4 no-scrollbar">
                         {messages.map(msg => <Message key={msg.id} message={msg} />)}
                         <div ref={messagesEndRef} />
                      </div>
@@ -362,13 +382,18 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                         </button>
                     )}
                      {!isSpeaker && (
-                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`py-2 px-4 rounded-lg text-lg transition-colors flex items-center gap-2 ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
-                           ✋ <span className="text-sm font-semibold">Raise Hand</span>
+                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`py-2 px-4 rounded-lg text-lg transition-colors flex items-center gap-2 ${hasRaisedHand ? 'bg-sky-500/80 cursor-not-allowed' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                           ✋ <span className="text-sm font-semibold">{hasRaisedHand ? 'Hand Raised' : 'Raise Hand'}</span>
                         </button>
                     )}
                      {isAdmin && (
                          <button onClick={handleMuteAll} className="py-2 px-4 rounded-lg bg-slate-600 hover:bg-slate-500 flex items-center gap-2" title="Mute All Speakers">
                             <Icon name="microphone-slash" className="w-5 h-5" /> <span className="text-sm font-semibold">Mute All</span>
+                        </button>
+                    )}
+                    {isAdmin && (
+                         <button onClick={handleUnmuteAll} className="py-2 px-4 rounded-lg bg-slate-600 hover:bg-slate-500 flex items-center gap-2" title="Unmute All Speakers">
+                            <Icon name="mic" className="w-5 h-5" /> <span className="text-sm font-semibold">Unmute All</span>
                         </button>
                     )}
                     <form onSubmit={handleSendMessage} className="flex-grow flex items-center gap-2 relative">
@@ -392,7 +417,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                 {/* Mobile Buttons */}
                 <div className="md:hidden flex items-center gap-2">
                     {!isSpeaker && (
-                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`p-3 rounded-full text-2xl transition-colors ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`p-3 rounded-full text-2xl transition-colors ${hasRaisedHand ? 'bg-sky-500/80 cursor-not-allowed' : 'bg-slate-600 hover:bg-slate-500'}`}>
                             ✋
                         </button>
                     )}

@@ -1515,6 +1515,18 @@ async muteAllSpeakersInRoom(roomId: string, adminId: string): Promise<void> {
         }
     }
 },
+async unmuteAllSpeakersInRoom(roomId: string, adminId: string): Promise<void> {
+    const roomRef = db.collection('liveAudioRooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+        const roomData = roomDoc.data();
+        const isHost = roomData.host.id === adminId;
+        const isCoHost = roomData.coHosts?.some(c => c.id === adminId);
+        if (isHost || isCoHost) {
+            await roomRef.update({ mutedSpeakers: [] });
+        }
+    }
+},
 async kickUserFromRoom(roomId: string, adminId: string, userId: string): Promise<void> {
     const roomRef = db.collection('liveAudioRooms').doc(roomId);
     const roomDoc = await roomRef.get();

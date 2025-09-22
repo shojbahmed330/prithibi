@@ -429,6 +429,7 @@ export const geminiService = {
     muteSpeakerInRoom: (roomId: string, adminId: string, userId: string) => firebaseService.muteSpeakerInRoom(roomId, adminId, userId),
     unmuteSpeakerInRoom: (roomId: string, adminId: string, userId: string) => firebaseService.unmuteSpeakerInRoom(roomId, adminId, userId),
     muteAllSpeakersInRoom: (roomId: string, adminId: string) => firebaseService.muteAllSpeakersInRoom(roomId, adminId),
+    unmuteAllSpeakersInRoom: (roomId: string, adminId: string) => firebaseService.unmuteAllSpeakersInRoom(roomId, adminId),
     kickUserFromRoom: (roomId: string, adminId: string, userId: string) => firebaseService.kickUserFromRoom(roomId, adminId, userId),
 
     // --- Ads & Campaigns ---
