@@ -14,6 +14,17 @@ interface LiveVideoRoomScreenProps {
   onSetTtsMessage: (message: string) => void;
 }
 
+// Consistent numeric UID generation
+const stringToNumericUid = (uid: string): number => {
+    let hash = 0;
+    for (let i = 0; i < uid.length; i++) {
+        const char = uid.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash); // Agora UIDs must be positive 32-bit integers.
+};
+
 
 // Participant Video Component
 const ParticipantVideo: React.FC<{
@@ -92,6 +103,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+    const [uidMap, setUidMap] = useState(new Map<number, string>());
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -134,7 +146,9 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             };
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max);
             if (mainSpeaker.level > 5) { // Threshold to avoid flickering
-                setActiveSpeakerId(mainSpeaker.uid as string);
+                const speakerNumericUid = mainSpeaker.uid as number;
+                const speakerFirebaseUid = uidMap.get(speakerNumericUid);
+                setActiveSpeakerId(speakerFirebaseUid || null);
             } else {
                 setActiveSpeakerId(null);
             }
@@ -148,11 +162,12 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
                 client.enableAudioVolumeIndicator();
                 client.on('volume-indicator', handleVolumeIndicator);
 
-                const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+                const numericUid = stringToNumericUid(currentUser.id);
+                const token = await geminiService.getAgoraToken(roomId, numericUid);
                 if (!token) {
                     throw new Error("Failed to retrieve Agora token. The video call cannot proceed.");
                 }
-                await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+                await client.join(AGORA_APP_ID, roomId, token, numericUid);
 
                 const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
                 localAudioTrack.current = audioTrack;
@@ -189,7 +204,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             client.leave();
             geminiService.leaveLiveVideoRoom(currentUser.id, roomId);
         };
-    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language]);
+    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language, uidMap]);
     
     // Firestore real-time listener for Room Metadata
     useEffect(() => {
@@ -197,6 +212,11 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
         const unsubscribe = geminiService.listenToVideoRoom(roomId, (roomDetails) => {
             if (roomDetails) {
                 setRoom(roomDetails);
+                 const newMap = new Map<number, string>();
+                [...roomDetails.participants].forEach(p => {
+                    if (p) newMap.set(stringToNumericUid(p.id), p.id);
+                });
+                setUidMap(newMap);
             } else {
                 onGoBack(); // Room has ended or doesn't exist
             }
@@ -223,11 +243,13 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const remoteUsersMap = useMemo(() => {
         const map: { [key: string]: IAgoraRTCRemoteUser } = {};
         remoteUsers.forEach(user => {
-            // The UID from Agora is the string Firebase UID
-            map[String(user.uid)] = user;
+            const firebaseUid = uidMap.get(user.uid as number);
+            if (firebaseUid) {
+                map[firebaseUid] = user;
+            }
         });
         return map;
-    }, [remoteUsers]);
+    }, [remoteUsers, uidMap]);
     
     if (isLoading || !room) {
         return <div className="h-full w-full flex items-center justify-center bg-slate-900 text-white">Loading Video Room...</div>;
@@ -235,15 +257,16 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     
     const participantsWithLocal = [
         ...room.participants,
-        { ...currentUser, isMuted, isCameraOff }
     ].filter((p, index, self) => index === self.findIndex((t) => t.id === p.id)); // Ensure unique participants
+    
+    const localParticipantState = { ...currentUser, isMuted, isCameraOff };
     
     return (
         <div className="h-full w-full flex flex-col bg-slate-900 text-white">
             <header className="flex-shrink-0 p-4 flex justify-between items-center bg-black/20">
                 <div>
                     <h1 className="text-xl font-bold truncate">{room.topic}</h1>
-                    <p className="text-sm text-slate-400">{participantsWithLocal.length} participant(s)</p>
+                    <p className="text-sm text-slate-400">{participantsWithLocal.length + 1} participant(s)</p>
                 </div>
                 <button onClick={onGoBack} className="bg-red-600 hover:bg-red-500 font-bold py-2 px-4 rounded-lg">
                     Leave
@@ -251,14 +274,25 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             </header>
 
             <main className="flex-grow p-4 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-min overflow-y-auto">
-                {participantsWithLocal.map(p => (
+                {/* Local User */}
+                 <ParticipantVideo
+                    key={currentUser.id}
+                    participant={localParticipantState}
+                    isLocal={true}
+                    isHost={localParticipantState.id === room.host.id}
+                    isSpeaking={localParticipantState.id === activeSpeakerId}
+                    localVideoTrack={localVideoTrackState}
+                    remoteUser={undefined}
+                />
+                {/* Remote Users */}
+                {participantsWithLocal.filter(p => p.id !== currentUser.id).map(p => (
                     <ParticipantVideo
                         key={p.id}
                         participant={p}
-                        isLocal={p.id === currentUser.id}
+                        isLocal={false}
                         isHost={p.id === room.host.id}
                         isSpeaking={p.id === activeSpeakerId}
-                        localVideoTrack={localVideoTrackState}
+                        localVideoTrack={null}
                         remoteUser={remoteUsersMap[p.id]}
                     />
                 ))}

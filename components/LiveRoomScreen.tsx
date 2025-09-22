@@ -16,6 +16,18 @@ interface LiveRoomScreenProps {
 
 const EMOJI_REACTIONS = ['❤️', '😂', '👍', '😢', '😡', '🔥', '🎉', '🙏'];
 
+// Consistent numeric UID generation
+const stringToNumericUid = (uid: string): number => {
+    let hash = 0;
+    for (let i = 0; i < uid.length; i++) {
+        const char = uid.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash); // Agora UIDs must be positive 32-bit integers.
+};
+
+
 const ParticipantActionModal: React.FC<{
     targetUser: User;
     room: LiveAudioRoom;
@@ -120,11 +132,13 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [isMuted, setIsMuted] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
     const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
+    const [uidMap, setUidMap] = useState(new Map<number, string>());
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
+    const numericUidRef = useRef<number | null>(null);
 
     const isHost = room?.host.id === currentUser.id;
     const isCoHost = room?.coHosts?.some(c => c.id === currentUser.id);
@@ -144,6 +158,13 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     return;
                 }
                 setRoom(roomDetails);
+
+                const newMap = new Map<number, string>();
+                [...roomDetails.speakers, ...roomDetails.listeners, roomDetails.host].forEach(p => {
+                    if (p) newMap.set(stringToNumericUid(p.id), p.id);
+                });
+                setUidMap(newMap);
+
             } else {
                 onSetTtsMessage("The room has ended.");
                 onGoBack();
@@ -166,20 +187,24 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
         client.on('volume-indicator', (volumes) => {
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max, { level: 0 });
             if (mainSpeaker.level > 10) {
-                // The UID from the event is the string Firebase UID
-                setActiveSpeakerId(mainSpeaker.uid as string);
+                const speakerNumericUid = mainSpeaker.uid as number;
+                const speakerFirebaseUid = uidMap.get(speakerNumericUid);
+                setActiveSpeakerId(speakerFirebaseUid || null);
             }
             else setActiveSpeakerId(null);
         });
 
         const joinAgora = async () => {
-             const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+             const numericUid = stringToNumericUid(currentUser.id);
+             numericUidRef.current = numericUid;
+
+             const token = await geminiService.getAgoraToken(roomId, numericUid);
              if (!token) {
                  onSetTtsMessage("Could not get audio token. Please try again.");
                  onGoBack();
                  return;
              }
-             await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+             await client.join(AGORA_APP_ID, roomId, token, numericUid);
              client.enableAudioVolumeIndicator();
         };
 
