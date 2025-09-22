@@ -14,6 +14,17 @@ interface LiveVideoRoomScreenProps {
   onSetTtsMessage: (message: string) => void;
 }
 
+const stringToNumericUid = (str: string): number => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    // Ensure the UID is a positive 32-bit unsigned integer
+    return hash >>> 0;
+};
+
 // Participant Video Component
 const ParticipantVideo: React.FC<{
     participant: VideoParticipantState;
@@ -91,12 +102,25 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+    const [uidMap, setUidMap] = useState<Map<number, string>>(new Map());
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
     const localVideoTrack = useRef<ICameraVideoTrack | null>(null);
     const [localVideoTrackState, setLocalVideoTrackState] = useState<ICameraVideoTrack | null>(null); // For re-rendering
     const { language } = useSettings();
+
+    useEffect(() => {
+        if (room) {
+            const newMap = new Map<number, string>();
+            room.participants.forEach(user => {
+                if (user) {
+                    newMap.set(stringToNumericUid(user.id), user.id);
+                }
+            });
+            setUidMap(newMap);
+        }
+    }, [room]);
 
     // Agora Lifecycle Management
     useEffect(() => {
@@ -133,7 +157,9 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             };
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max);
             if (mainSpeaker.level > 5) { // Threshold to avoid flickering
-                setActiveSpeakerId(mainSpeaker.uid as string);
+                const numericUid = mainSpeaker.uid as number;
+                const firebaseId = uidMap.get(numericUid);
+                setActiveSpeakerId(firebaseId || null);
             } else {
                 setActiveSpeakerId(null);
             }
@@ -147,11 +173,12 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
                 client.enableAudioVolumeIndicator();
                 client.on('volume-indicator', handleVolumeIndicator);
 
-                const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+                const uid = stringToNumericUid(currentUser.id);
+                const token = await geminiService.getAgoraToken(roomId, uid);
                 if (!token) {
                     throw new Error("Failed to retrieve Agora token. The video call cannot proceed.");
                 }
-                await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+                await client.join(AGORA_APP_ID, roomId, token, uid);
 
                 const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
                 localAudioTrack.current = audioTrack;
@@ -188,7 +215,7 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
             client.leave();
             geminiService.leaveLiveVideoRoom(currentUser.id, roomId);
         };
-    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language]);
+    }, [roomId, currentUser.id, onGoBack, onSetTtsMessage, language, uidMap]);
     
     // Firestore real-time listener for Room Metadata
     useEffect(() => {
@@ -222,10 +249,13 @@ const LiveVideoRoomScreen: React.FC<LiveVideoRoomScreenProps> = ({ currentUser, 
     const remoteUsersMap = useMemo(() => {
         const map: { [key: string]: IAgoraRTCRemoteUser } = {};
         remoteUsers.forEach(user => {
-            map[user.uid as string] = user;
+            const firebaseId = uidMap.get(user.uid as number);
+            if (firebaseId) {
+                map[firebaseId] = user;
+            }
         });
         return map;
-    }, [remoteUsers]);
+    }, [remoteUsers, uidMap]);
     
     if (isLoading || !room) {
         return <div className="h-full w-full flex items-center justify-center bg-slate-900 text-white">Loading Video Room...</div>;

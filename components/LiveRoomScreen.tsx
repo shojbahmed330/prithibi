@@ -16,6 +16,17 @@ interface LiveRoomScreenProps {
 
 const EMOJI_REACTIONS = ['❤️', '😂', '👍', '😢', '😡', '🔥', '🎉', '🙏'];
 
+const stringToNumericUid = (str: string): number => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    // Ensure the UID is a positive 32-bit unsigned integer
+    return hash >>> 0;
+};
+
 const ParticipantActionModal: React.FC<{
     targetUser: User;
     room: LiveAudioRoom;
@@ -121,6 +132,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
     const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
     const [handRaisedOptimistic, setHandRaisedOptimistic] = useState(false);
+    const [uidMap, setUidMap] = useState<Map<number, string>>(new Map());
 
     const agoraClient = useRef<IAgoraRTCClient | null>(null);
     const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -139,6 +151,19 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             setHandRaisedOptimistic(false);
         }
     }, [room, currentUser.id]);
+
+    useEffect(() => {
+        if (room) {
+            const newMap = new Map<number, string>();
+            [...room.speakers, ...room.listeners, room.host].forEach(user => {
+                if (user) {
+                    newMap.set(stringToNumericUid(user.id), user.id);
+                }
+            });
+            setUidMap(newMap);
+        }
+    }, [room]);
+
 
     useEffect(() => {
         setIsLoading(true);
@@ -178,19 +203,22 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             }
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max, { level: 0 });
             if (mainSpeaker.level > 10) {
-                setActiveSpeakerId(mainSpeaker.uid as string);
+                const numericUid = mainSpeaker.uid as number;
+                const firebaseId = uidMap.get(numericUid);
+                setActiveSpeakerId(firebaseId || null);
             }
             else setActiveSpeakerId(null);
         });
 
         const joinAgora = async () => {
-             const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+             const uid = stringToNumericUid(currentUser.id);
+             const token = await geminiService.getAgoraToken(roomId, uid);
              if (!token) {
                  onSetTtsMessage("Could not get audio token. Please try again.");
                  onGoBack();
                  return;
              }
-             await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
+             await client.join(AGORA_APP_ID, roomId, token, uid);
              client.enableAudioVolumeIndicator();
         };
 
@@ -212,7 +240,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             localAudioTrack.current?.close();
             agoraClient.current?.leave();
         };
-    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage]);
+    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage, uidMap]);
     
     useEffect(() => {
         const publishAudio = async () => {

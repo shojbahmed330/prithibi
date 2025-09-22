@@ -16,6 +16,18 @@ interface CallScreenProps {
   onSetTtsMessage: (message: string) => void;
 }
 
+const stringToNumericUid = (str: string): number => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    // Ensure the UID is a positive 32-bit unsigned integer
+    return hash >>> 0;
+};
+
+
 const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, isCaller, onGoBack, onSetTtsMessage }) => {
     const [call, setCall] = useState<Call | null>(null);
     const [isMuted, setIsMuted] = useState(false);
@@ -42,6 +54,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, 
             callStatusRef.current = liveCall?.status || null;
             if (!liveCall || ['ended', 'declined', 'missed'].includes(liveCall.status)) {
                 setTimeout(() => {
+                    // This check prevents navigating away if the call becomes active right after an ended state was briefly set
                     if (callStatusRef.current !== 'active' && callStatusRef.current !== 'ringing') {
                         onGoBack();
                     }
@@ -108,11 +121,12 @@ const CallScreen: React.FC<CallScreenProps> = ({ currentUser, peerUser, callId, 
                 firebaseService.updateCallStatus(callId, 'ended');
             });
             
-            const token = await geminiService.getAgoraToken(callId, currentUser.id);
+            const uid = stringToNumericUid(currentUser.id);
+            const token = await geminiService.getAgoraToken(callId, uid);
             if (!token) {
                 throw new Error("Failed to retrieve Agora token. The call cannot proceed.");
             }
-            await client.join(AGORA_APP_ID, callId, token, currentUser.id);
+            await client.join(AGORA_APP_ID, callId, token, uid);
 
             try {
                 const tracksToPublish: (IMicrophoneAudioTrack | ICameraVideoTrack)[] = [];
