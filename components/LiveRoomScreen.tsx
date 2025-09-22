@@ -132,19 +132,6 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
     const isSpeaker = room?.speakers.some(s => s.id === currentUser.id);
     const hasRaisedHand = room?.raisedHands.includes(currentUser.id);
 
-    const uidMap = useMemo(() => {
-        if (!room) return new Map<number, string>();
-        const map = new Map<number, string>();
-        [...(room.speakers || []), ...(room.listeners || [])].forEach(user => {
-            if (user && user.id) {
-                const numericUid = parseInt(user.id, 36) % 10000000;
-                map.set(numericUid, user.id);
-            }
-        });
-        return map;
-    }, [room]);
-
-
     useEffect(() => {
         setIsLoading(true);
         geminiService.joinLiveAudioRoom(currentUser.id, roomId);
@@ -169,19 +156,30 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         agoraClient.current = client;
 
+        client.on('user-published', async (user, mediaType) => {
+            await client.subscribe(user, mediaType);
+            if (mediaType === 'audio') {
+                user.audioTrack?.play();
+            }
+        });
+
         client.on('volume-indicator', (volumes) => {
             const mainSpeaker = volumes.reduce((max, current) => current.level > max.level ? current : max, { level: 0 });
             if (mainSpeaker.level > 10) {
-                const firebaseId = uidMap.get(mainSpeaker.uid as number);
-                setActiveSpeakerId(firebaseId || null);
+                // The UID from the event is the string Firebase UID
+                setActiveSpeakerId(mainSpeaker.uid as string);
             }
             else setActiveSpeakerId(null);
         });
 
         const joinAgora = async () => {
-             const uid = parseInt(currentUser.id, 36) % 10000000;
-             const token = await geminiService.getAgoraToken(roomId, uid);
-             await client.join(AGORA_APP_ID, roomId, token, uid);
+             const token = await geminiService.getAgoraToken(roomId, currentUser.id);
+             if (!token) {
+                 onSetTtsMessage("Could not get audio token. Please try again.");
+                 onGoBack();
+                 return;
+             }
+             await client.join(AGORA_APP_ID, roomId, token, currentUser.id);
              client.enableAudioVolumeIndicator();
         };
 
@@ -195,14 +193,19 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             localAudioTrack.current?.close();
             agoraClient.current?.leave();
         };
-    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage, uidMap]);
+    }, [roomId, onGoBack, currentUser.id, onSetTtsMessage]);
     
     useEffect(() => {
         const publishAudio = async () => {
             if(isSpeaker && !localAudioTrack.current) {
-                localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
-                await agoraClient.current?.publish(localAudioTrack.current);
-                localAudioTrack.current.setMuted(isMuted);
+                try {
+                    localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
+                    await agoraClient.current?.publish(localAudioTrack.current);
+                    localAudioTrack.current.setMuted(isMuted);
+                } catch (e) {
+                    console.error("Failed to create or publish audio track", e);
+                    onSetTtsMessage("Could not access microphone.");
+                }
             } else if (!isSpeaker && localAudioTrack.current) {
                 await agoraClient.current?.unpublish(localAudioTrack.current);
                 localAudioTrack.current.stop();
@@ -211,7 +214,7 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
             }
         }
         publishAudio();
-    }, [isSpeaker, isMuted]);
+    }, [isSpeaker, isMuted, onSetTtsMessage]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
