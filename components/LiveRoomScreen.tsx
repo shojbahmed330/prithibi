@@ -79,7 +79,7 @@ const ParticipantActionModal: React.FC<{
 const SpeakerCard: React.FC<{ user: User; isHost: boolean; isCoHost: boolean; isMuted: boolean; isSpeaking: boolean; onClick: () => void }> = ({ user, isHost, isCoHost, isMuted, isSpeaking, onClick }) => (
     <div className="flex flex-col items-center gap-2 text-center w-24 md:w-28">
         <button onClick={onClick} className="relative group">
-            <img src={user.avatarUrl} alt={user.name} className={`w-20 h-20 md:w-24 md:h-24 rounded-full transition-all duration-200 ${isSpeaking ? 'ring-4 ring-green-400 animate-pulse' : 'ring-2 ring-lime-500/50'}`} />
+            <img src={user.avatarUrl} alt={user.name} className={`w-20 h-20 md:w-24 md:h-24 rounded-full transition-all duration-200 object-cover ${isSpeaking ? 'ring-4 ring-green-400 animate-pulse' : 'ring-2 ring-fuchsia-500/50'}`} />
             {(isHost || isCoHost) && <div className="absolute -bottom-1 -right-1 bg-amber-400 text-black text-sm p-1 rounded-full shadow-lg">{isHost ? '👑' : '⭐'}</div>}
             {isMuted && <div className="absolute top-0 right-0 bg-black/60 p-1.5 rounded-full"><Icon name="microphone-slash" className="w-4 h-4 text-white"/></div>}
         </button>
@@ -89,7 +89,7 @@ const SpeakerCard: React.FC<{ user: User; isHost: boolean; isCoHost: boolean; is
 
 const ListenerCard: React.FC<{ user: User; isAdminView: boolean; hasRaisedHand: boolean; onClick: () => void }> = ({ user, isAdminView, hasRaisedHand, onClick }) => (
      <button onClick={onClick} className="flex flex-col items-center gap-1 w-20 text-center relative group">
-        <img src={user.avatarUrl} alt={user.name} title={user.name} className="w-14 h-14 rounded-full ring-2 ring-slate-700 transition-transform group-hover:scale-105" />
+        <img src={user.avatarUrl} alt={user.name} title={user.name} className="w-14 h-14 rounded-full ring-2 ring-slate-700 transition-transform group-hover:scale-105 object-cover" />
         {isAdminView && hasRaisedHand && (
             <div className="absolute -top-1 -right-1 bg-sky-500 p-1.5 rounded-full animate-pulse shadow-lg text-lg">✋</div>
         )}
@@ -99,10 +99,10 @@ const ListenerCard: React.FC<{ user: User; isAdminView: boolean; hasRaisedHand: 
 
 const Message: React.FC<{ message: LiveAudioRoomMessage }> = ({ message }) => (
     <div className="flex items-start gap-2 text-sm max-w-full animate-fade-in-fast">
-        <img src={message.sender.avatarUrl} className="w-8 h-8 rounded-full flex-shrink-0 mt-1" alt={message.sender.name} />
+        <img src={message.sender.avatarUrl} className="w-8 h-8 rounded-full flex-shrink-0 mt-1 object-cover" alt={message.sender.name} />
         <div className="flex-shrink min-w-0 bg-slate-800/50 px-3 py-2 rounded-lg">
             <div className="flex items-baseline gap-2">
-                <span className={`font-semibold ${message.isHost ? 'text-amber-400' : message.isCoHost ? 'text-sky-400' : 'text-lime-400'}`}>{message.sender.name}</span>
+                <span className={`font-semibold ${message.isHost ? 'text-amber-400' : message.isCoHost ? 'text-sky-400' : 'text-fuchsia-400'}`}>{message.sender.name}</span>
                  <span className="text-xs text-slate-500">{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
             <p className="text-slate-200 break-words whitespace-pre-wrap">{message.text}</p>
@@ -223,7 +223,6 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
         if (!newMessage.trim() || !room) return;
         await geminiService.sendLiveAudioRoomMessage(roomId, currentUser, newMessage, !!isHost, !!isSpeaker, !!isCoHost);
         setNewMessage('');
-        setEmojiPickerOpen(false);
     };
     
     const handleRaiseHand = () => {
@@ -273,9 +272,10 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                     {isHost ? 'End Room' : 'Leave'}
                 </button>
             </header>
-
-            <div className="flex-grow flex flex-col-reverse md:flex-row overflow-hidden">
-                <main className="flex-grow overflow-y-auto p-4 space-y-6 md:w-2/3 md:border-r md:border-slate-700 relative">
+            
+            <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
+                {/* Main content for both mobile and desktop */}
+                <main className="flex-grow md:w-2/3 p-4 space-y-6 overflow-y-auto md:border-r md:border-slate-700 relative">
                     <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
                         {floatingEmojis.map(({ id, emoji, x }) => (
                             <span key={id} className="floating-reaction absolute bottom-0 text-4xl" style={{ left: `${x}%` }}>
@@ -296,7 +296,9 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                         </div>
                     </section>
                 </main>
-                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50 flex-shrink-0 h-48 md:h-auto">
+
+                {/* Chat area */}
+                <aside className="w-full md:w-1/3 flex flex-col bg-slate-800/50 flex-shrink-0 h-56 md:h-auto border-t md:border-t-0 md:border-l border-slate-700">
                      <h2 className="text-lg font-semibold text-slate-300 p-4 border-b border-slate-700 flex-shrink-0">Live Chat</h2>
                      <div className="flex-grow overflow-y-auto p-4 space-y-4 no-scrollbar">
                         {messages.map(msg => <Message key={msg.id} message={msg} />)}
@@ -304,40 +306,72 @@ const LiveRoomScreen: React.FC<LiveRoomScreenProps> = ({ currentUser, roomId, on
                      </div>
                 </aside>
             </div>
-
-            <footer className="flex-shrink-0 p-2 bg-black/30 border-t border-slate-700">
-                <div className="flex items-center gap-2">
-                    {isSpeaker && (
+            
+            {/* --- New Mobile & Desktop Footer --- */}
+            <footer className="flex-shrink-0 p-2 bg-black/50 border-t border-slate-700">
+                {/* Desktop Buttons */}
+                <div className="hidden md:flex items-center gap-2">
+                     {isSpeaker && (
                         <button onClick={toggleMute} className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-red-600' : 'bg-slate-600 hover:bg-slate-500'}`}>
                             <Icon name={isMuted ? 'microphone-slash' : 'mic'} className="w-5 h-5" />
                         </button>
                     )}
                      {!isSpeaker && (
+                        <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`py-2 px-4 rounded-lg text-lg transition-colors flex items-center gap-2 ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                           ✋ <span className="text-sm font-semibold">Raise Hand</span>
+                        </button>
+                    )}
+                     {isAdmin && (
+                         <button onClick={handleMuteAll} className="py-2 px-4 rounded-lg bg-slate-600 hover:bg-slate-500 flex items-center gap-2" title="Mute All Speakers">
+                            <Icon name="microphone-slash" className="w-5 h-5" /> <span className="text-sm font-semibold">Mute All</span>
+                        </button>
+                    )}
+                    <form onSubmit={handleSendMessage} className="flex-grow flex items-center gap-2 relative">
+                         <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Send a message..." className="w-full bg-slate-700 rounded-full py-2 pl-4 pr-12 text-sm focus:ring-fuchsia-500 focus:border-fuchsia-500"/>
+                         <button type="submit" disabled={!newMessage.trim()} className="absolute right-1 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-fuchsia-600 text-black hover:bg-fuchsia-500 disabled:bg-slate-500 h-8 w-8 flex items-center justify-center"><Icon name="paper-airplane" className="w-4 h-4"/></button>
+                    </form>
+                    <div className="relative" ref={emojiPickerRef}>
+                        <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} className="p-3 rounded-full text-slate-300 hover:bg-slate-600">
+                            <Icon name="face-smile" className="w-5 h-5"/>
+                        </button>
+                         {isEmojiPickerOpen && (
+                            <div className="absolute bottom-full right-0 mb-2 bg-slate-900/90 backdrop-blur-sm border border-fuchsia-500/20 rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg w-48">
+                                {EMOJI_REACTIONS.map(emoji => (
+                                    <button key={emoji} type="button" onClick={() => triggerFloatingEmoji(emoji)} className="text-2xl p-1 rounded-md hover:bg-slate-700 aspect-square flex items-center justify-center">{emoji}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Mobile Buttons */}
+                <div className="md:hidden flex items-center gap-2">
+                    {!isSpeaker && (
                         <button onClick={handleRaiseHand} disabled={hasRaisedHand} className={`p-3 rounded-full text-2xl transition-colors ${hasRaisedHand ? 'bg-sky-500' : 'bg-slate-600 hover:bg-slate-500'}`}>
                             ✋
                         </button>
                     )}
-                     {isAdmin && (
-                         <button onClick={handleMuteAll} className="p-3 rounded-full bg-slate-600 hover:bg-slate-500" title="Mute All Speakers">
-                            <Icon name="microphone-slash" className="w-5 h-5" />
+                    {isSpeaker && (
+                         <button onClick={toggleMute} className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-red-600' : 'bg-slate-600 hover:bg-slate-500'}`}>
+                            <Icon name={isMuted ? 'microphone-slash' : 'mic'} className="w-5 h-5" />
                         </button>
                     )}
-                    <form onSubmit={handleSendMessage} className="flex-grow flex items-center gap-2 relative">
-                         <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Send a message..." className="w-full bg-slate-700 rounded-full py-2 pl-4 pr-12 text-sm focus:ring-lime-500 focus:border-lime-500"/>
-                         <div className="absolute right-12" ref={emojiPickerRef}>
-                            <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} className="p-2 rounded-full text-slate-300 hover:bg-slate-600">
-                                <Icon name="face-smile" className="w-5 h-5"/>
-                            </button>
-                             {isEmojiPickerOpen && (
-                                <div className="absolute bottom-full right-0 mb-2 bg-slate-900/90 backdrop-blur-sm border border-lime-500/20 rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg w-48">
-                                    {EMOJI_REACTIONS.map(emoji => (
-                                        <button key={emoji} type="button" onClick={() => triggerFloatingEmoji(emoji)} className="text-2xl p-1 rounded-md hover:bg-slate-700 aspect-square flex items-center justify-center">{emoji}</button>
-                                    ))}
-                                </div>
-                            )}
-                         </div>
-                         <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-lime-600 text-black hover:bg-lime-500 disabled:bg-slate-500"><Icon name="paper-airplane" className="w-5 h-5"/></button>
+                    <form onSubmit={handleSendMessage} className="flex-grow flex items-center relative">
+                         <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Send a message..." className="w-full bg-slate-700 rounded-full py-2 pl-4 pr-10 text-sm focus:ring-fuchsia-500 focus:border-fuchsia-500"/>
+                         <button type="submit" disabled={!newMessage.trim()} className="absolute right-1 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-fuchsia-600 text-black hover:bg-fuchsia-500 disabled:bg-slate-500 h-8 w-8 flex items-center justify-center"><Icon name="paper-airplane" className="w-4 h-4"/></button>
                     </form>
+                     <div className="relative" ref={emojiPickerRef}>
+                        <button type="button" onClick={() => setEmojiPickerOpen(p => !p)} className="p-3 rounded-full text-slate-300 hover:bg-slate-600">
+                            <Icon name="face-smile" className="w-5 h-5"/>
+                        </button>
+                         {isEmojiPickerOpen && (
+                            <div className="absolute bottom-full right-0 mb-2 bg-slate-900/90 backdrop-blur-sm border border-fuchsia-500/20 rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg w-48">
+                                {EMOJI_REACTIONS.map(emoji => (
+                                    <button key={emoji} type="button" onClick={() => triggerFloatingEmoji(emoji)} className="text-2xl p-1 rounded-md hover:bg-slate-700 aspect-square flex items-center justify-center">{emoji}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </footer>
              {selectedParticipant && <ParticipantActionModal targetUser={selectedParticipant} room={room} currentUser={currentUser} onClose={() => setSelectedParticipant(null)} />}
